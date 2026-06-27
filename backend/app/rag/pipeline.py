@@ -69,8 +69,6 @@ async def run_rag_pipeline(
     except Exception:
         chunks = chunks[:5]
 
-    confidence = compute_confidence_from_rerank(chunks)
-
     from app.rag.pii_filter import filter_pii
     clean_chunks = []
     for c in chunks:
@@ -83,6 +81,8 @@ async def run_rag_pipeline(
     llm_answer = await _call_llm(HR_SYSTEM_PROMPT, prompt)
 
     llm_answer = filter_pii(llm_answer, use_presidio=False)
+
+    confidence = compute_confidence_from_rerank(clean_chunks, llm_answer=llm_answer)
 
     from app.rag.citation import format_citations
     citations = format_citations(clean_chunks)
