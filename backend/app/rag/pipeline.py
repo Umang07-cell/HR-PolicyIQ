@@ -1,17 +1,3 @@
-"""
-Full RAG pipeline — PRD Section 10.
-Steps: cache → transform → embed → hybrid search (ABAC) → RRF → confidence gate
-       → rerank → confidence (rerank-based) → PII pre-LLM → LLM → PII post-LLM
-       → cache write → citations
-
-FIX-01: query_transform applied before retrieval.
-FIX-02: confidence gate uses should_abstain() with corrected RRF normalisation.
-FIX-03: citations use normalised rerank_score.
-FIX-04: prompt includes page numbers.
-FIX-05: result dict includes confidence_label.
-FIX-06: confidence computed AFTER reranking from sigmoid(rerank_score),
-         not before reranking from raw RRF. This is the 100% confidence bug fix.
-"""
 import hashlib
 import json
 from typing import Optional
@@ -35,7 +21,6 @@ async def run_rag_pipeline(
     dept = department or ""
     loc = location or ""
 
-    # --- Step 1: Redis cache check ---
     redis = None
     cache_key = None
     try:
@@ -50,12 +35,9 @@ async def run_rag_pipeline(
         redis = None
         cache_key = None
 
-    # --- Step 2: Query transformation ---
     from app.rag.query_transform import transform_query
     transformed_query = transform_query(query)
-    logger.info("query_transformed", original=query[:80], transformed=transformed_query[:80])
 
-    # --- Step 3: Hybrid retrieval with ABAC ---
     try:
         from app.rag.retriever import retrieve_chunks
         chunks = retrieve_chunks(
@@ -70,9 +52,6 @@ async def run_rag_pipeline(
         logger.error("retrieval_failed", error=str(e))
         chunks = []
 
-    # --- Step 4: Confidence gate (early exit, RRF-based, before reranker) ---
-    # FIX-06: this gate uses RRF only for cheap early exit.
-    # Final user-facing confidence is computed after reranking at Step 6.
     from app.rag.confidence import should_abstain, compute_confidence_from_rerank, confidence_label
     if should_abstain(chunks):
         return {
@@ -84,20 +63,14 @@ async def run_rag_pipeline(
             "query": query,
         }
 
-    # --- Step 5: Rerank ---
     try:
         from app.rag.reranker import rerank
         chunks = rerank(transformed_query, chunks, top_k=5)
     except Exception:
         chunks = chunks[:5]
 
-    # --- Step 6: Compute final confidence from rerank scores (FIX-06) ---
-    # sigmoid(rerank_score) is a real relevance probability, not a ranking artefact.
-    # This replaces the broken RRF-based confidence that always showed 100%.
     confidence = compute_confidence_from_rerank(chunks)
-    logger.info("confidence_computed", score=confidence, method="rerank" if "rerank_score" in chunks[0] else "rrf_fallback")
 
-    # --- Step 7: PII redaction pre-LLM ---
     from app.rag.pii_filter import filter_pii
     clean_chunks = []
     for c in chunks:
@@ -105,15 +78,12 @@ async def run_rag_pipeline(
         c_copy["text"] = filter_pii(c["text"], use_presidio=False)
         clean_chunks.append(c_copy)
 
-    # --- Step 8: LLM synthesis ---
     from app.rag.prompt_templates import HR_SYSTEM_PROMPT, build_rag_prompt
     prompt = build_rag_prompt(query, clean_chunks)
     llm_answer = await _call_llm(HR_SYSTEM_PROMPT, prompt)
 
-    # --- Step 9: PII redaction post-LLM ---
     llm_answer = filter_pii(llm_answer, use_presidio=False)
 
-    # --- Step 10: Build citations ---
     from app.rag.citation import format_citations
     citations = format_citations(clean_chunks)
 
@@ -126,7 +96,6 @@ async def run_rag_pipeline(
         "query": query,
     }
 
-    # --- Step 11: Cache write (24h TTL) ---
     try:
         if redis and cache_key and not llm_answer.startswith("I was unable to generate"):
             redis.setex(cache_key, 86400, json.dumps(result))
@@ -137,7 +106,6 @@ async def run_rag_pipeline(
 
 
 async def _call_llm(system_prompt: str, user_prompt: str) -> str:
-    """Call Groq API for LLM inference."""
     try:
         from groq import Groq
         client = Groq(api_key=settings.GROQ_API_KEY)
