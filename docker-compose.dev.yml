@@ -1,0 +1,38 @@
+version: "3.9"
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment: { POSTGRES_USER: hruser, POSTGRES_PASSWORD: hrpass, POSTGRES_DB: hrplatform }
+    ports: ["5432:5432"]
+    volumes: [postgres_data:/var/lib/postgresql/data]
+
+  qdrant:
+    image: qdrant/qdrant:v1.10.0
+    ports: ["6333:6333"]
+    volumes: [qdrant_data:/qdrant/storage]
+
+  redis:
+    image: redis:7-alpine
+    ports: ["6379:6379"]
+
+  backend:
+    build: ./backend
+    ports: ["8000:8000"]
+    environment:
+      DATABASE_URL: postgresql://hruser:hrpass@postgres:5432/hrplatform
+      QDRANT_HOST: qdrant
+      REDIS_URL: redis://redis:6379/0
+      SECRET_KEY: dev-secret-change-in-prod
+      DEBUG: "true"
+    depends_on: [postgres, qdrant, redis]
+    volumes: [./backend:/app, uploads_data:/app/uploads]
+
+  frontend:
+    image: node:20-alpine
+    working_dir: /app
+    volumes: [./frontend:/app]
+    ports: ["5173:5173"]
+    command: sh -c "npm install && npm run dev -- --host"
+    environment: { VITE_API_URL: "http://localhost:8000" }
+
+volumes: { postgres_data: {}, qdrant_data: {}, uploads_data: {} }

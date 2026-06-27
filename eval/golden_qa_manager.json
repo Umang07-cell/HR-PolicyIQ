@@ -1,0 +1,4 @@
+[
+  {"question": "How do I approve a leave request?", "expected_answer": "Go to Leave > Pending Approval and click Approve", "module": "leave"},
+  {"question": "What is the performance review cycle?", "expected_answer": "Half-yearly — H1 and H2", "module": "performance"}
+]

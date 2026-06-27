@@ -1,0 +1,87 @@
+openapi: 3.1.0
+info:
+  title: HR Automation Platform API
+  version: 1.0.0
+  description: Enterprise HR Platform with RAG-powered chat and ABAC security
+
+servers:
+  - url: http://localhost:8000
+    description: Local development
+
+security:
+  - BearerAuth: []
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email: { type: string, format: email }
+        password: { type: string }
+
+    TokenResponse:
+      type: object
+      properties:
+        access_token: { type: string }
+        token_type: { type: string, default: bearer }
+        role: { type: string }
+        full_name: { type: string }
+        user_id: { type: integer }
+
+paths:
+  /auth/login:
+    post:
+      summary: Login
+      tags: [Authentication]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/LoginRequest' }
+      responses:
+        '200':
+          description: JWT token
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TokenResponse' }
+
+  /chat/:
+    post:
+      summary: Ask an HR question (ABAC-filtered RAG)
+      tags: [Chat]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                query: { type: string }
+                module: { type: string }
+      responses:
+        '200':
+          description: RAG answer with citations
+
+  /documents/upload:
+    post:
+      summary: Upload and index a document
+      tags: [Documents]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file: { type: string, format: binary }
+                title: { type: string }
+                module: { type: string }
+      responses:
+        '200': { description: Document uploaded and indexed }

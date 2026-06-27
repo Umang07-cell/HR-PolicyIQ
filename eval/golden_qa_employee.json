@@ -1,0 +1,5 @@
+[
+  {"question": "How many casual leaves am I entitled to?", "expected_answer": "12 casual leaves per year", "module": "leave"},
+  {"question": "What is the notice period for resignation?", "expected_answer": "30 to 90 days depending on role", "module": "policy"},
+  {"question": "How do I apply for earned leave encashment?", "expected_answer": "Submit a request via HR portal before March 31", "module": "leave"}
+]

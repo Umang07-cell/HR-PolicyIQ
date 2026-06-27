@@ -1,0 +1,4 @@
+[
+  {"question": "How is PII handled in the system?", "expected_answer": "Presidio redacts PII before chunks reach the LLM", "module": "policy"},
+  {"question": "What is the ABAC policy for payroll documents?", "expected_answer": "Payroll documents are restricted to manager and hr_admin roles", "module": "payroll"}
+]

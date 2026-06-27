@@ -1,0 +1,84 @@
+# ── Secrets ────────────────────────────────────────────────────────────────────
+.env
+backend/.env
+# Keep the examples — they show what vars are needed, no real values
+!.env.example
+!backend/.env.example
+
+# ── Python ─────────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+env/
+
+# ── ML model cache ─────────────────────────────────────────────────────────────
+# sentence-transformers and HuggingFace download models here
+~/.cache/huggingface/
+backend/.cache/
+*.bin
+*.safetensors
+*.onnx
+*.pt
+*.pth
+
+# ── Uploaded HR documents ──────────────────────────────────────────────────────
+# Real employee/policy PDFs — never commit these
+backend/uploads/
+uploads/
+
+# ── Qdrant local storage ───────────────────────────────────────────────────────
+# Qdrant persists vector data here when running locally
+qdrant_storage/
+backend/qdrant_storage/
+
+# ── Alembic generated files ────────────────────────────────────────────────────
+# Auto-generated migration scripts are fine to commit, but not the DB itself
+*.db
+*.sqlite3
+
+# ── Logs ───────────────────────────────────────────────────────────────────────
+*.log
+logs/
+backend/logs/
+
+# ── Frontend ────────────────────────────────────────────────────────────────────
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+frontend/coverage/
+
+# ── SSL certs (nginx) ─────────────────────────────────────────────────────────
+# Certs are generated per-deployment, never committed
+infra/nginx/certs/*.pem
+infra/nginx/certs/*.crt
+infra/nginx/certs/*.key
+
+# ── Docker volumes / runtime data ─────────────────────────────────────────────
+postgres_data/
+redis_data/
+minio_data/
+grafana_data/
+prometheus_data/
+
+# ── OS junk ───────────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ── IDE ───────────────────────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# ── Pytest / coverage ─────────────────────────────────────────────────────────
+.pytest_cache/
+.coverage
+htmlcov/

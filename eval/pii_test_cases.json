@@ -1,0 +1,5 @@
+[
+  {"input": "Aadhaar: 2345 6789 0123", "should_contain": "AADHAAR-REDACTED", "should_not_contain": "2345 6789 0123"},
+  {"input": "PAN: ABCDE1234F", "should_contain": "PAN-REDACTED", "should_not_contain": "ABCDE1234F"},
+  {"input": "Salary is 50000 per month", "should_not_contain": "2345"}
+]

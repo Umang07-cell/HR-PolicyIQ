@@ -1,0 +1,6 @@
+[
+  {"user_role": "employee", "document_access_roles": ["hr_admin"], "expected_accessible": false},
+  {"user_role": "hr_admin", "document_access_roles": ["hr_admin"], "expected_accessible": true},
+  {"user_role": "manager", "document_access_roles": ["employee", "manager"], "expected_accessible": true},
+  {"user_role": "employee", "document_access_roles": ["all"], "expected_accessible": true}
+]
