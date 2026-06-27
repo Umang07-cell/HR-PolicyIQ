@@ -1,50 +1,65 @@
-"""
-Confidence scoring for the hybrid RAG pipeline.
 
-RRF scores are inherently tiny: max theoretical = 1/(k+1) = 1/61 ≈ 0.0164.
-We normalise to 0–1 so the UI shows a human-readable percentage.
+import math
+from typing import List, Dict, Any
 
-Thresholds (tunable via env/config):
-  HIGH   >= 0.65  → answer with full citations
-  MEDIUM  0.35–0.64 → answer with caveat
-  LOW    < 0.35   → abstain and route to HR
+# Hybrid system: two lists, so max RRF = 1/(k+1) + 1/(k+1) = 2/61
+MAX_RRF_HYBRID = 2.0 / 61.0   # BUG-1 FIX: was 1/61
 
-FIX: gate now also checks score spread — a single weak chunk that barely
-passes the raw threshold is penalised if the top-2 score gap is huge,
-which usually means only one document partially matched.
-"""
-
-CONFIDENCE_GATE_THRESHOLD = 0.25   # below this → abstain (normalised scale)
-MAX_RRF = 1.0 / 61.0               # 1/(k+1) where k=60
+# Early-exit gate threshold (applied to normalised RRF before reranking)
+CONFIDENCE_GATE_THRESHOLD = 0.20   # below this → abstain without calling reranker
 
 
-def compute_confidence(chunks) -> float:
+def _sigmoid(x: float) -> float:
+    """Map cross-encoder logit to [0, 1]."""
+    try:
+        return 1.0 / (1.0 + math.exp(-x))
+    except OverflowError:
+        return 0.0 if x < 0 else 1.0
+
+
+def compute_confidence_from_rrf(chunks: List[Dict[str, Any]]) -> float:
     """
-    Returns a normalised confidence score in [0.0, 1.0].
-    Uses the top chunk's RRF score, normalised against the theoretical maximum.
+    Fast pre-rerank confidence from RRF scores.
+    Used only for the early-exit gate — not shown to users.
+    BUG-1 FIX: normalises against MAX_RRF_HYBRID (2/61), not 1/61.
     """
     if not chunks:
         return 0.0
     top_score = chunks[0].get("score", 0.0)
-    normalised = min(top_score / MAX_RRF, 1.0)
-    return round(normalised, 3)
+    return round(min(top_score / MAX_RRF_HYBRID, 1.0), 3)
 
 
-def should_abstain(chunks) -> bool:
+def compute_confidence_from_rerank(chunks: List[Dict[str, Any]]) -> float:
     """
-    Returns True if the retrieval confidence is too low to generate an answer.
-    Abstaining is preferable to generating a wrong HR policy answer.
+    Final confidence from the BGE cross-encoder rerank score.
+    BUG-2 + BUG-3 FIX: uses sigmoid(rerank_score) of the top reranked
+    chunk. Falls back to corrected RRF normalisation if reranker unavailable.
+    """
+    if not chunks:
+        return 0.0
+    top = chunks[0]
+    if "rerank_score" in top:
+        # Cross-encoder logit → sigmoid → [0, 1]
+        return round(_sigmoid(top["rerank_score"]), 3)
+    # Fallback: corrected RRF normalisation
+    return compute_confidence_from_rrf(chunks)
+
+
+def should_abstain(chunks: List[Dict[str, Any]]) -> bool:
+    """
+    Early-exit gate using RRF score (before reranking).
+    Returns True if retrieval is so weak that calling the reranker
+    and LLM would be wasteful — abstain and route to HR.
     """
     if not chunks:
         return True
-    confidence = compute_confidence(chunks)
-    return confidence < CONFIDENCE_GATE_THRESHOLD
+    return compute_confidence_from_rrf(chunks) < CONFIDENCE_GATE_THRESHOLD
 
 
 def confidence_label(score: float) -> str:
-    """Human-readable confidence label for UI display."""
-    if score >= 0.65:
+    """Human-readable label for UI badge."""
+    if score >= 0.75:
         return "high"
-    elif score >= 0.35:
+    elif score >= 0.45:
         return "medium"
     return "low"
