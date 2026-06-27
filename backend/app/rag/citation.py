@@ -1,6 +1,8 @@
 from typing import List, Dict
 import math
 
+DROP_THRESHOLD = 0.25
+
 
 def _relative_score(rerank_scores: List[float], idx: int) -> float:
     min_s = min(rerank_scores)
@@ -33,10 +35,11 @@ def format_citations(chunks: List[Dict]) -> List[Dict]:
             continue
         seen_ids.add(chunk_key)
 
-        if use_relative:
-            score = _relative_score(rerank_scores, i)
-        else:
-            score = _normalise_rrf(c.get("score", 0.0))
+        score = (
+            _relative_score(rerank_scores, i)
+            if use_relative
+            else _normalise_rrf(c.get("score", 0.0))
+        )
 
         citations.append({
             "document_id": doc_id,
@@ -47,4 +50,11 @@ def format_citations(chunks: List[Dict]) -> List[Dict]:
             "score": score,
         })
 
-    return citations
+    if not citations:
+        return citations
+
+    top_score = max(c["score"] for c in citations)
+    cutoff = top_score - DROP_THRESHOLD
+    filtered = [c for c in citations if c["score"] >= cutoff]
+
+    return filtered if filtered else citations[:1]
