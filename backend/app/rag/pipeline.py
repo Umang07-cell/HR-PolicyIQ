@@ -1,15 +1,16 @@
 """
 Full RAG pipeline — PRD Section 10.
 Steps: cache → transform → embed → hybrid search (ABAC) → RRF → confidence gate
-       → rerank → PII pre-LLM → LLM → PII post-LLM → cache write → citations
+       → rerank → confidence (rerank-based) → PII pre-LLM → LLM → PII post-LLM
+       → cache write → citations
 
-FIX-01: query_transform is now applied BEFORE retrieval (was skipped — chat.py
-         called run_rag_pipeline directly, bypassing chat_service.py transform).
-FIX-02: confidence gate now uses should_abstain() helper instead of bare `if not chunks`.
-FIX-03: citations built from citation.py format_citations() which uses normalised
-         rerank_score, not raw RRF score.
-FIX-04: prompt now includes page numbers via updated build_rag_prompt.
-FIX-05: result dict includes 'confidence_label' for richer UI display.
+FIX-01: query_transform applied before retrieval.
+FIX-02: confidence gate uses should_abstain() with corrected RRF normalisation.
+FIX-03: citations use normalised rerank_score.
+FIX-04: prompt includes page numbers.
+FIX-05: result dict includes confidence_label.
+FIX-06: confidence computed AFTER reranking from sigmoid(rerank_score),
+         not before reranking from raw RRF. This is the 100% confidence bug fix.
 """
 import hashlib
 import json
@@ -49,7 +50,7 @@ async def run_rag_pipeline(
         redis = None
         cache_key = None
 
-    # --- Step 2: Query transformation (FIX-01: was missing from pipeline) ---
+    # --- Step 2: Query transformation ---
     from app.rag.query_transform import transform_query
     transformed_query = transform_query(query)
     logger.info("query_transformed", original=query[:80], transformed=transformed_query[:80])
@@ -69,20 +70,19 @@ async def run_rag_pipeline(
         logger.error("retrieval_failed", error=str(e))
         chunks = []
 
-    # --- Step 4: Confidence gate (FIX-02: use should_abstain helper) ---
-    from app.rag.confidence import compute_confidence, should_abstain, confidence_label
-    confidence = compute_confidence(chunks)
-
+    # --- Step 4: Confidence gate (early exit, RRF-based, before reranker) ---
+    # FIX-06: this gate uses RRF only for cheap early exit.
+    # Final user-facing confidence is computed after reranking at Step 6.
+    from app.rag.confidence import should_abstain, compute_confidence_from_rerank, confidence_label
     if should_abstain(chunks):
-        result = {
+        return {
             "answer": "I could not find a clear policy for this in the available HR documents. Please contact HR directly.",
             "citations": [],
-            "confidence": confidence,
+            "confidence": 0.0,
             "confidence_label": "low",
             "llm_called": False,
             "query": query,
         }
-        return result
 
     # --- Step 5: Rerank ---
     try:
@@ -91,7 +91,13 @@ async def run_rag_pipeline(
     except Exception:
         chunks = chunks[:5]
 
-    # --- Step 6: PII redaction pre-LLM ---
+    # --- Step 6: Compute final confidence from rerank scores (FIX-06) ---
+    # sigmoid(rerank_score) is a real relevance probability, not a ranking artefact.
+    # This replaces the broken RRF-based confidence that always showed 100%.
+    confidence = compute_confidence_from_rerank(chunks)
+    logger.info("confidence_computed", score=confidence, method="rerank" if "rerank_score" in chunks[0] else "rrf_fallback")
+
+    # --- Step 7: PII redaction pre-LLM ---
     from app.rag.pii_filter import filter_pii
     clean_chunks = []
     for c in chunks:
@@ -99,15 +105,15 @@ async def run_rag_pipeline(
         c_copy["text"] = filter_pii(c["text"], use_presidio=False)
         clean_chunks.append(c_copy)
 
-    # --- Step 7: LLM synthesis ---
+    # --- Step 8: LLM synthesis ---
     from app.rag.prompt_templates import HR_SYSTEM_PROMPT, build_rag_prompt
     prompt = build_rag_prompt(query, clean_chunks)
     llm_answer = await _call_llm(HR_SYSTEM_PROMPT, prompt)
 
-    # --- Step 8: PII redaction post-LLM ---
+    # --- Step 9: PII redaction post-LLM ---
     llm_answer = filter_pii(llm_answer, use_presidio=False)
 
-    # --- Step 9: Build citations (FIX-03: use format_citations for normalised scores) ---
+    # --- Step 10: Build citations ---
     from app.rag.citation import format_citations
     citations = format_citations(clean_chunks)
 
@@ -120,7 +126,7 @@ async def run_rag_pipeline(
         "query": query,
     }
 
-    # --- Step 10: Cache write (24h TTL) ---
+    # --- Step 11: Cache write (24h TTL) ---
     try:
         if redis and cache_key and not llm_answer.startswith("I was unable to generate"):
             redis.setex(cache_key, 86400, json.dumps(result))
@@ -141,8 +147,8 @@ async def _call_llm(system_prompt: str, user_prompt: str) -> str:
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt},
             ],
-            temperature=0.0,   # zero temperature — no creativity, pure retrieval
-            max_tokens=400,    # citation engine needs < 200 words; cap headroom
+            temperature=0.0,
+            max_tokens=400,
         )
         return (completion.choices[0].message.content or "").strip()
     except Exception as e:
