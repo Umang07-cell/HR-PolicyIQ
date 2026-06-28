@@ -1,6 +1,6 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, EmailStr
 from typing import Optional
-from app.models.recruitment import JobStatus, ApplicationStatus
+
 
 class JobCreate(BaseModel):
     title: str
@@ -9,20 +9,29 @@ class JobCreate(BaseModel):
     description: Optional[str] = None
     requirements: Optional[str] = None
 
-class ApplicationCreate(BaseModel):
-    job_id: int
-    candidate_name: str
-    candidate_email: str
-    notes: Optional[str] = None
-
-class ApplicationStatusUpdate(BaseModel):
-    status: ApplicationStatus
-    notes: Optional[str] = None
 
 class JobOut(BaseModel):
     id: int
     title: str
-    department: str | None
-    location: str | None
-    status: JobStatus
+    department: Optional[str]
+    location: Optional[str]
+    description: Optional[str]
+    status: str
+    model_config = {"from_attributes": True}
+
+
+class ApplicationCreate(BaseModel):
+    job_id: int
+    candidate_name: str
+    candidate_email: EmailStr
+    notes: Optional[str] = None
+
+
+class ApplicationOut(BaseModel):
+    id: int
+    job_id: int
+    candidate_name: str
+    candidate_email: str
+    status: str
+    notes: Optional[str]
     model_config = {"from_attributes": True}

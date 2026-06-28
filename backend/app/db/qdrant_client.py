@@ -1,9 +1,8 @@
 from qdrant_client import QdrantClient
 from qdrant_client.models import Distance, VectorParams, SparseVectorParams
-# BUG-J FIX: removed unused import SparseIndexParams
 from app.core.config import settings
 
-_client = None
+_client: QdrantClient = None
 
 
 def get_qdrant() -> QdrantClient:
@@ -13,13 +12,16 @@ def get_qdrant() -> QdrantClient:
     return _client
 
 
+def init_qdrant():
+    global _client
+    _client = QdrantClient(host=settings.QDRANT_HOST, port=settings.QDRANT_PORT)
+
+
 def ensure_collection():
     client = get_qdrant()
     try:
         client.get_collection(settings.QDRANT_COLLECTION)
-        print(f"Collection '{settings.QDRANT_COLLECTION}' already exists")
     except Exception:
-        print(f"Creating collection '{settings.QDRANT_COLLECTION}'...")
         client.create_collection(
             collection_name=settings.QDRANT_COLLECTION,
             vectors_config={
@@ -27,6 +29,5 @@ def ensure_collection():
             },
             sparse_vectors_config={
                 "sparse": SparseVectorParams()
-            }
+            },
         )
-        print(f"Collection created SUCCESS")

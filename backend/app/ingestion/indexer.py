@@ -1,58 +1,56 @@
-from typing import List, Dict
+from typing import List
+import uuid
 from qdrant_client.models import PointStruct, SparseVector
 from app.db.qdrant_client import get_qdrant
 from app.rag.embedder import embed_texts, embed_sparse
 from app.core.config import settings
-import uuid
+from app.core.logging import logger
+
+UPSERT_BATCH_SIZE = 50
 
 
 def index_chunks(chunks, document_id, document_title, module, access_roles, access_departments, access_locations):
-    print(f"INDEX_CHUNKS called: {len(chunks)} chunks, doc_id={document_id}")
     if not chunks:
         return []
 
+    logger.info("indexing_start", doc_id=document_id, chunks=len(chunks))
+
     texts = [c["text"] for c in chunks]
-    print(f"Embedding {len(texts)} texts...")
     embeddings = embed_texts(texts)
-    print(f"Got {len(embeddings)} embeddings, dim={len(embeddings[0])}")
 
     client = get_qdrant()
     ids = []
+    points = []
 
     for i, (chunk, embedding) in enumerate(zip(chunks, embeddings)):
         point_id = str(uuid.uuid4())
         ids.append(point_id)
-        
-        # Generate sparse vector
-        sparse_indices, sparse_values = embed_sparse(chunk["text"])
-        
-        try:
-            client.upsert(
-                collection_name=settings.QDRANT_COLLECTION,
-                points=[PointStruct(
-                    id=point_id,
-                    vector={
-                        "dense": embedding,
-                        "sparse": SparseVector(indices=sparse_indices, values=sparse_values)
-                    },
-                    payload={
-                        "text": chunk["text"],
-                        "document_id": document_id,
-                        "document_title": document_title,
-                        "chunk_index": chunk.get("chunk_index", 0),
-                        "page": chunk.get("page"),
-                        "module": module,
-                        "access_roles": access_roles if access_roles else ["all"],
-                        "access_departments": access_departments,
-                        "access_departments_open": len(access_departments) == 0,
-                        "access_locations": access_locations if access_locations else ["all"],
-                    }
-                )]
-            )
-            print(f"SUCCESS: Upserted {i+1}/{len(chunks)}")
-        except Exception as e:
-            print(f"FAILED UPSERT chunk {i}: {type(e).__name__}: {e}")
-            raise
 
-    print(f"Upsert complete — {len(ids)} points stored")
+        sparse_indices, sparse_values = embed_sparse(chunk["text"])
+
+        points.append(PointStruct(
+            id=point_id,
+            vector={
+                "dense": embedding,
+                "sparse": SparseVector(indices=sparse_indices, values=sparse_values),
+            },
+            payload={
+                "text": chunk["text"][:2000],
+                "document_id": document_id,
+                "document_title": document_title,
+                "chunk_index": chunk.get("chunk_index", 0),
+                "page": chunk.get("page"),
+                "module": module,
+                "access_roles": access_roles if access_roles else ["all"],
+                "access_departments": access_departments if access_departments else ["all"],
+                "access_locations": access_locations if access_locations else ["all"],
+            },
+        ))
+
+    for batch_start in range(0, len(points), UPSERT_BATCH_SIZE):
+        batch = points[batch_start: batch_start + UPSERT_BATCH_SIZE]
+        client.upsert(collection_name=settings.QDRANT_COLLECTION, points=batch)
+        logger.info("upsert_batch", doc_id=document_id, batch_end=batch_start + len(batch), total=len(points))
+
+    logger.info("indexing_complete", doc_id=document_id, points=len(ids))
     return ids

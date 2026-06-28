@@ -1,14 +1,18 @@
-from sqlalchemy import Column, Integer, String, JSON, DateTime, ForeignKey
+from sqlalchemy import Column, Integer, String, JSON, DateTime, ForeignKey, Index
 from app.db.base import Base
-from datetime import datetime
+from datetime import datetime, timezone
+
+
+def _now():
+    return datetime.now(timezone.utc)
+
 
 class AuditLog(Base):
     __tablename__ = "audit_logs"
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
-    action = Column(String(200), nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
+    action = Column(String(200), nullable=False, index=True)
     resource = Column(String(200), nullable=False)
     resource_id = Column(String(200), nullable=True)
     detail = Column(JSON, default=dict)
-    timestamp = Column(DateTime, default=datetime.utcnow, nullable=False)
-    # append-only: no UPDATE/DELETE allowed on this table
+    timestamp = Column(DateTime(timezone=True), default=_now, nullable=False, index=True)

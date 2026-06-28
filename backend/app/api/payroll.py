@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import IntegrityError
 from typing import List, Optional
 from app.db.session import get_db
 from app.core.dependencies import get_current_user, require_role
@@ -23,11 +24,19 @@ class PayrollCreate(BaseModel):
 
 
 @router.get("/my", response_model=List[PayrollOut], summary="My payslips")
-def my_payslips(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def my_payslips(
+    skip: int = 0,
+    limit: int = 24,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    limit = min(limit, 60)
     records = (
         db.query(PayrollRecord)
         .filter(PayrollRecord.employee_id == current_user.id)
         .order_by(PayrollRecord.month.desc())
+        .offset(skip)
+        .limit(limit)
         .all()
     )
     log_action(db, current_user.id, "PAYROLL_VIEW", "payroll", None)
@@ -35,7 +44,11 @@ def my_payslips(db: Session = Depends(get_db), current_user: User = Depends(get_
 
 
 @router.get("/my/{month}", response_model=PayrollOut, summary="Payslip for a specific month")
-def payslip_by_month(month: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def payslip_by_month(
+    month: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     record = db.query(PayrollRecord).filter(
         PayrollRecord.employee_id == current_user.id,
         PayrollRecord.month == month,
@@ -46,7 +59,11 @@ def payslip_by_month(month: str, db: Session = Depends(get_db), current_user: Us
 
 
 @router.post("/", response_model=PayrollOut, summary="Create payroll record (HR Admin)")
-def create_payroll(req: PayrollCreate, db: Session = Depends(get_db), current_user: User = Depends(require_role("hr_admin"))):
+def create_payroll(
+    req: PayrollCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role("hr_admin")),
+):
     net = req.basic + req.hra + req.allowances - req.deductions - req.tax_deducted
     record = PayrollRecord(
         employee_id=req.employee_id,
@@ -59,7 +76,15 @@ def create_payroll(req: PayrollCreate, db: Session = Depends(get_db), current_us
         net_salary=net,
     )
     db.add(record)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(
+            status_code=409,
+            detail=f"Payroll record for employee {req.employee_id} in {req.month} already exists.",
+        )
     db.refresh(record)
-    log_action(db, current_user.id, "PAYROLL_CREATE", "payroll", str(record.id), {"employee_id": req.employee_id, "month": req.month})
+    log_action(db, current_user.id, "PAYROLL_CREATE", "payroll", str(record.id),
+               {"employee_id": req.employee_id, "month": req.month})
     return record

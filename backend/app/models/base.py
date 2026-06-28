@@ -1,7 +1,12 @@
-from sqlalchemy import Column, Integer, DateTime
-from datetime import datetime
-from app.db.base import Base
+from sqlalchemy import Column, DateTime
+from datetime import datetime, timezone
+
+
+def _now():
+    return datetime.now(timezone.utc)
+
 
 class TimestampMixin:
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    __abstract__ = True
+    created_at = Column(DateTime(timezone=True), default=_now, nullable=False)
+    updated_at = Column(DateTime(timezone=True), default=_now, onupdate=_now, nullable=False)

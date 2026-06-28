@@ -6,6 +6,7 @@ import enum
 
 class DocumentStatus(str, enum.Enum):
     draft = "draft"
+    processing = "processing"
     published = "published"
     archived = "archived"
 
@@ -18,14 +19,14 @@ class Document(Base, TimestampMixin):
     file_path = Column(String(1000), nullable=False)
     file_size = Column(Integer, nullable=True)
     content_type = Column(String(100), nullable=True)
-    module = Column(String(50), nullable=True, default="policy")
+    module = Column(String(50), nullable=True, default="policy", index=True)
     description = Column(Text, nullable=True)
     version = Column(Integer, default=1, nullable=False)
-    status = Column(SAEnum(DocumentStatus), default=DocumentStatus.draft)
-    is_indexed = Column(Boolean, default=False, nullable=False)
+    status = Column(SAEnum(DocumentStatus), default=DocumentStatus.draft, index=True)
+    is_indexed = Column(Boolean, default=False, nullable=False, index=True)
     chunk_count = Column(Integer, default=0)
     qdrant_ids = Column(JSON, default=list)
     access_roles = Column(JSON, default=list)
     access_departments = Column(JSON, default=list)
     access_locations = Column(JSON, default=list)
-    uploaded_by = Column(Integer, ForeignKey("users.id"), nullable=False)
+    uploaded_by = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)

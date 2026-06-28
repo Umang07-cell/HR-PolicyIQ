@@ -12,17 +12,47 @@ router = APIRouter(prefix="/performance", tags=["Performance Management"])
 
 
 @router.get("/my", response_model=List[ReviewOut], summary="My performance reviews")
-def my_reviews(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    return db.query(PerformanceReview).filter(PerformanceReview.employee_id == current_user.id).order_by(PerformanceReview.id.desc()).all()
+def my_reviews(
+    skip: int = 0,
+    limit: int = 20,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    limit = min(limit, 50)
+    return (
+        db.query(PerformanceReview)
+        .filter(PerformanceReview.employee_id == current_user.id)
+        .order_by(PerformanceReview.id.desc())
+        .offset(skip)
+        .limit(limit)
+        .all()
+    )
 
 
 @router.get("/team", response_model=List[ReviewOut], summary="Team reviews (Manager)")
-def team_reviews(db: Session = Depends(get_db), current_user: User = Depends(require_role("manager", "hr_admin"))):
-    return db.query(PerformanceReview).filter(PerformanceReview.reviewer_id == current_user.id).order_by(PerformanceReview.id.desc()).all()
+def team_reviews(
+    skip: int = 0,
+    limit: int = 50,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role("manager", "hr_admin")),
+):
+    limit = min(limit, 100)
+    return (
+        db.query(PerformanceReview)
+        .filter(PerformanceReview.reviewer_id == current_user.id)
+        .order_by(PerformanceReview.id.desc())
+        .offset(skip)
+        .limit(limit)
+        .all()
+    )
 
 
 @router.post("/review", response_model=ReviewOut, summary="Create a performance review")
-def create_review(req: ReviewCreate, db: Session = Depends(get_db), current_user: User = Depends(require_role("manager", "hr_admin"))):
+def create_review(
+    req: ReviewCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role("manager", "hr_admin")),
+):
     employee = db.query(User).filter(User.id == req.employee_id).first()
     if not employee:
         raise HTTPException(status_code=404, detail="Employee not found")
@@ -51,8 +81,15 @@ def create_review(req: ReviewCreate, db: Session = Depends(get_db), current_user
 
 
 @router.post("/{review_id}/submit", response_model=ReviewOut, summary="Submit a draft review")
-def submit_review(review_id: int, db: Session = Depends(get_db), current_user: User = Depends(require_role("manager", "hr_admin"))):
-    review = db.query(PerformanceReview).filter(PerformanceReview.id == review_id, PerformanceReview.reviewer_id == current_user.id).first()
+def submit_review(
+    review_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role("manager", "hr_admin")),
+):
+    review = db.query(PerformanceReview).filter(
+        PerformanceReview.id == review_id,
+        PerformanceReview.reviewer_id == current_user.id,
+    ).first()
     if not review:
         raise HTTPException(status_code=404, detail="Review not found")
     review.status = ReviewStatus.submitted

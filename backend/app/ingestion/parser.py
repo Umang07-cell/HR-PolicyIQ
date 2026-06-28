@@ -1,12 +1,10 @@
-"""
-Document parser — extracts text from PDF, DOCX.
-Uses pypdf + python-docx for prototype. Swap with Docling (IBM) for production.
-"""
 import os
 from typing import List, Dict
 
+DOCX_WORDS_PER_PAGE = 400
+
+
 def parse_document(file_path: str, content_type: str) -> List[Dict]:
-    """Returns list of pages: [{"page": 1, "text": "..."}]"""
     ext = os.path.splitext(file_path)[1].lower()
 
     if ext == ".pdf" or content_type == "application/pdf":
@@ -19,6 +17,7 @@ def parse_document(file_path: str, content_type: str) -> List[Dict]:
     else:
         raise ValueError(f"Unsupported file type: {ext}")
 
+
 def _parse_pdf(path: str) -> List[Dict]:
     from pypdf import PdfReader
     reader = PdfReader(path)
@@ -29,8 +28,19 @@ def _parse_pdf(path: str) -> List[Dict]:
             pages.append({"page": i + 1, "text": text})
     return pages
 
+
 def _parse_docx(path: str) -> List[Dict]:
     from docx import Document
     doc = Document(path)
-    text = "\n".join(p.text for p in doc.paragraphs if p.text.strip())
-    return [{"page": 1, "text": text}]
+    paragraphs = [p.text for p in doc.paragraphs if p.text.strip()]
+    all_words = " ".join(paragraphs).split()
+
+    pages = []
+    page_num = 1
+    for start in range(0, len(all_words), DOCX_WORDS_PER_PAGE):
+        chunk_text = " ".join(all_words[start: start + DOCX_WORDS_PER_PAGE])
+        if chunk_text.strip():
+            pages.append({"page": page_num, "text": chunk_text})
+            page_num += 1
+
+    return pages if pages else [{"page": 1, "text": " ".join(all_words)}]

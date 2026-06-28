@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Text, Boolean, ForeignKey
+from sqlalchemy import Column, Integer, String, Text, Boolean, ForeignKey, Index
 from app.db.base import Base
 from app.models.base import TimestampMixin
 
@@ -6,8 +6,8 @@ from app.models.base import TimestampMixin
 class Notification(Base, TimestampMixin):
     __tablename__ = "notifications"
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
     title = Column(String(255), nullable=False)
-    body = Column(Text, nullable=True)
-    is_read = Column(Boolean, default=False)
-    notif_type = Column(String(50), default="info")
+    message = Column(Text, nullable=True)
+    is_read = Column(Boolean, default=False, index=True)
+    notification_type = Column(String(50), default="info", index=True)

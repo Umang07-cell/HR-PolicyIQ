@@ -5,94 +5,79 @@ from app.db.session import get_db
 from app.core.dependencies import get_current_user, require_role
 from app.core.audit import log_action
 from app.models.user import User
-from app.models.document import Document
 from app.models.audit_log import AuditLog
-from app.models.leave import LeaveRequest, LeaveStatus
-from app.models.grievance import Grievance, GrievanceStatus
-from pydantic import BaseModel, EmailStr
-from app.core.security import get_password_hash
+from app.schemas.auth import UserCreate, UserOut
+from app.services.user_service import create_user, deactivate_user
+from app.api.analytics import get_platform_stats
 
 router = APIRouter(prefix="/admin", tags=["Admin"])
 
 
-class UserCreate(BaseModel):
-    email: str
-    password: str
-    full_name: str
-    role: str = "employee"
-    department: Optional[str] = None
-    location: Optional[str] = None
-    employee_id: Optional[str] = None
-
-
-class UserOut(BaseModel):
-    id: int
-    email: str
-    full_name: str
-    role: str
-    department: Optional[str]
-    location: Optional[str]
-    is_active: bool
-    model_config = {"from_attributes": True}
-
-
 @router.get("/dashboard", summary="Platform dashboard statistics")
-def get_dashboard(db: Session = Depends(get_db), _: User = Depends(require_role("hr_admin", "executive"))):
-    return {
-        "total_users": db.query(User).count(),
-        "total_documents": db.query(Document).count(),
-        "indexed_documents": db.query(Document).filter(Document.is_indexed == True).count(),
-        "total_queries": db.query(AuditLog).filter(AuditLog.action == "CHAT_QUERY").count(),
-        "pending_leaves": db.query(LeaveRequest).filter(LeaveRequest.status == LeaveStatus.pending).count(),
-        "open_grievances": db.query(Grievance).filter(Grievance.status.in_([GrievanceStatus.submitted, GrievanceStatus.in_progress])).count(),
-    }
+def get_dashboard(
+    db: Session = Depends(get_db),
+    _: User = Depends(require_role("hr_admin", "executive")),
+):
+    return get_platform_stats(db)
 
 
 @router.get("/users", response_model=List[UserOut], summary="List all users")
-def list_users(db: Session = Depends(get_db), _: User = Depends(require_role("hr_admin", "executive"))):
-    return db.query(User).order_by(User.id.desc()).all()
+def list_users(
+    skip: int = 0,
+    limit: int = 50,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_role("hr_admin", "executive")),
+):
+    limit = min(limit, 200)
+    return db.query(User).order_by(User.id.desc()).offset(skip).limit(limit).all()
 
 
 @router.post("/users", response_model=UserOut, summary="Create a user")
-def create_user(req: UserCreate, db: Session = Depends(get_db), current_user: User = Depends(require_role("hr_admin"))):
+def create_user_endpoint(
+    req: UserCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role("hr_admin")),
+):
+    if len(req.password) < 8:
+        raise HTTPException(status_code=400, detail="Password must be at least 8 characters")
     if db.query(User).filter(User.email == req.email.lower()).first():
         raise HTTPException(status_code=400, detail="Email already registered")
-    user = User(
-        email=req.email.lower().strip(),
-        hashed_password=get_password_hash(req.password),
+    user = create_user(
+        db=db,
+        email=req.email,
+        password=req.password,
         full_name=req.full_name,
         role=req.role,
         department=req.department,
         location=req.location,
         employee_id=req.employee_id,
-        is_active=True,
     )
-    db.add(user)
-    db.commit()
-    db.refresh(user)
     log_action(db, current_user.id, "USER_CREATE", "user", str(user.id), {"email": req.email})
     return user
 
 
 @router.patch("/users/{user_id}/deactivate", summary="Deactivate a user")
-def deactivate_user(user_id: int, db: Session = Depends(get_db), current_user: User = Depends(require_role("hr_admin"))):
-    user = db.query(User).filter(User.id == user_id).first()
-    if not user:
+def deactivate_user_endpoint(
+    user_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role("hr_admin")),
+):
+    if not deactivate_user(db, user_id):
         raise HTTPException(status_code=404, detail="User not found")
-    user.is_active = False
-    db.commit()
     log_action(db, current_user.id, "USER_DEACTIVATE", "user", str(user_id))
     return {"message": "User deactivated"}
 
 
 @router.get("/audit-logs", summary="Retrieve audit logs")
 def get_audit_logs(
+    skip: int = 0,
     limit: int = 100,
     action: Optional[str] = None,
     db: Session = Depends(get_db),
     _: User = Depends(require_role("hr_admin", "executive")),
 ):
+    limit = min(limit, 500)
     q = db.query(AuditLog)
     if action:
         q = q.filter(AuditLog.action == action)
-    return q.order_by(AuditLog.timestamp.desc()).limit(limit).all()
+    return q.order_by(AuditLog.timestamp.desc()).offset(skip).limit(limit).all()

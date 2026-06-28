@@ -12,20 +12,32 @@ from app.models.audit_log import AuditLog
 router = APIRouter(prefix="/analytics", tags=["Analytics"])
 
 
-@router.get("/overview", summary="High-level platform analytics")
-def overview(db: Session = Depends(get_db), _: User = Depends(require_role("hr_admin", "executive"))):
+def get_platform_stats(db: Session) -> dict:
     return {
         "total_users": db.query(User).count(),
         "total_documents": db.query(Document).count(),
         "indexed_documents": db.query(Document).filter(Document.is_indexed == True).count(),
         "pending_leaves": db.query(LeaveRequest).filter(LeaveRequest.status == LeaveStatus.pending).count(),
-        "open_grievances": db.query(Grievance).filter(Grievance.status.in_([GrievanceStatus.submitted, GrievanceStatus.in_progress])).count(),
+        "open_grievances": db.query(Grievance).filter(
+            Grievance.status.in_([GrievanceStatus.submitted, GrievanceStatus.in_progress])
+        ).count(),
         "total_queries": db.query(AuditLog).filter(AuditLog.action == "CHAT_QUERY").count(),
     }
 
 
+@router.get("/overview", summary="High-level platform analytics")
+def overview(
+    db: Session = Depends(get_db),
+    _: User = Depends(require_role("hr_admin", "executive")),
+):
+    return get_platform_stats(db)
+
+
 @router.get("/leave-trends", summary="Leave requests grouped by type")
-def leave_trends(db: Session = Depends(get_db), _: User = Depends(require_role("hr_admin", "executive"))):
+def leave_trends(
+    db: Session = Depends(get_db),
+    _: User = Depends(require_role("hr_admin", "executive")),
+):
     rows = (
         db.query(LeaveRequest.leave_type, func.count(LeaveRequest.id), func.sum(LeaveRequest.days))
         .group_by(LeaveRequest.leave_type)
@@ -35,7 +47,10 @@ def leave_trends(db: Session = Depends(get_db), _: User = Depends(require_role("
 
 
 @router.get("/chat-usage", summary="Chat usage statistics")
-def chat_usage(db: Session = Depends(get_db), _: User = Depends(require_role("hr_admin", "executive"))):
+def chat_usage(
+    db: Session = Depends(get_db),
+    _: User = Depends(require_role("hr_admin", "executive")),
+):
     total = db.query(AuditLog).filter(AuditLog.action == "CHAT_QUERY").count()
     top_users_raw = (
         db.query(AuditLog.user_id, func.count(AuditLog.id).label("queries"))

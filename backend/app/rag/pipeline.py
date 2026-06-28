@@ -1,12 +1,23 @@
 import hashlib
 import json
+import asyncio
 from typing import Optional, AsyncGenerator
 from app.core.config import settings
 from app.core.logging import logger
 
+_groq_client = None
 
-def _cache_key(query: str, role: str, dept: str, loc: str) -> str:
-    raw = f"{query.lower().strip()}|{role}|{dept}|{loc}"
+
+def _get_groq():
+    global _groq_client
+    if _groq_client is None:
+        from groq import Groq
+        _groq_client = Groq(api_key=settings.GROQ_API_KEY)
+    return _groq_client
+
+
+def _cache_key(query: str, role: str, dept: str, loc: str, module: str) -> str:
+    raw = f"{query.lower().strip()}|{role}|{dept}|{loc}|{module}"
     return f"rag:{hashlib.sha256(raw.encode()).hexdigest()}"
 
 
@@ -20,13 +31,14 @@ async def run_rag_pipeline(
 ) -> dict:
     dept = department or ""
     loc = location or ""
+    mod = module or ""
 
     redis = None
     cache_key = None
     try:
         from app.db.redis_client import get_redis
         redis = get_redis()
-        cache_key = _cache_key(query, role, dept, loc)
+        cache_key = _cache_key(query, role, dept, loc, mod)
         cached = redis.get(cache_key)
         if cached:
             logger.info("cache_hit", user_id=user_id, key=cache_key[:16])
@@ -73,13 +85,13 @@ async def run_rag_pipeline(
     clean_chunks = []
     for c in chunks:
         c_copy = dict(c)
-        c_copy["text"] = filter_pii(c["text"], use_presidio=False)
+        c_copy["text"] = filter_pii(c["text"], use_presidio=True)
         clean_chunks.append(c_copy)
 
     from app.rag.prompt_templates import HR_SYSTEM_PROMPT, build_rag_prompt
     prompt = build_rag_prompt(query, clean_chunks)
     llm_answer = await _call_llm(HR_SYSTEM_PROMPT, prompt)
-    llm_answer = filter_pii(llm_answer, use_presidio=False)
+    llm_answer = filter_pii(llm_answer, use_presidio=True)
 
     confidence = compute_confidence_from_rerank(clean_chunks, llm_answer=llm_answer)
 
@@ -114,13 +126,14 @@ async def run_rag_pipeline_stream(
 ) -> AsyncGenerator[dict, None]:
     dept = department or ""
     loc = location or ""
+    mod = module or ""
 
     redis = None
     cache_key = None
     try:
         from app.db.redis_client import get_redis
         redis = get_redis()
-        cache_key = _cache_key(query, role, dept, loc)
+        cache_key = _cache_key(query, role, dept, loc, mod)
         cached = redis.get(cache_key)
         if cached:
             data = json.loads(cached)
@@ -172,7 +185,7 @@ async def run_rag_pipeline_stream(
     clean_chunks = []
     for c in chunks:
         c_copy = dict(c)
-        c_copy["text"] = filter_pii(c["text"], use_presidio=False)
+        c_copy["text"] = filter_pii(c["text"], use_presidio=True)
         clean_chunks.append(c_copy)
 
     from app.rag.prompt_templates import HR_SYSTEM_PROMPT, build_rag_prompt
@@ -184,11 +197,11 @@ async def run_rag_pipeline_stream(
         full_answer += clean_token
         yield {"type": "token", "text": clean_token}
 
+    full_answer = filter_pii(full_answer, use_presidio=True)
     confidence = compute_confidence_from_rerank(clean_chunks, llm_answer=full_answer)
 
     from app.rag.citation import format_citations
     citations = format_citations(clean_chunks)
-
     label = confidence_label(confidence)
 
     try:
@@ -204,28 +217,27 @@ async def run_rag_pipeline_stream(
     except Exception:
         pass
 
-    yield {
-        "type": "done",
-        "citations": citations,
-        "confidence": confidence,
-        "confidence_label": label,
-    }
+    yield {"type": "done", "citations": citations, "confidence": confidence, "confidence_label": label}
+
+
+def _llm_call_sync(system_prompt: str, user_prompt: str) -> str:
+    client = _get_groq()
+    completion = client.chat.completions.create(
+        model=settings.LLM_MODEL,
+        messages=[
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt},
+        ],
+        temperature=0.0,
+        max_tokens=600,
+    )
+    return (completion.choices[0].message.content or "").strip()
 
 
 async def _call_llm(system_prompt: str, user_prompt: str) -> str:
     try:
-        from groq import Groq
-        client = Groq(api_key=settings.GROQ_API_KEY)
-        completion = client.chat.completions.create(
-            model=settings.LLM_MODEL,
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_prompt},
-            ],
-            temperature=0.0,
-            max_tokens=400,
-        )
-        return (completion.choices[0].message.content or "").strip()
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, _llm_call_sync, system_prompt, user_prompt)
     except Exception as e:
         logger.error("llm_call_failed", error=str(e))
         return "I was unable to generate a response at this time. Please try again later or contact HR."
@@ -233,8 +245,7 @@ async def _call_llm(system_prompt: str, user_prompt: str) -> str:
 
 async def _call_llm_stream(system_prompt: str, user_prompt: str) -> AsyncGenerator[str, None]:
     try:
-        from groq import Groq
-        client = Groq(api_key=settings.GROQ_API_KEY)
+        client = _get_groq()
         stream = client.chat.completions.create(
             model=settings.LLM_MODEL,
             messages=[
@@ -242,7 +253,7 @@ async def _call_llm_stream(system_prompt: str, user_prompt: str) -> AsyncGenerat
                 {"role": "user", "content": user_prompt},
             ],
             temperature=0.0,
-            max_tokens=400,
+            max_tokens=600,
             stream=True,
         )
         for chunk in stream:

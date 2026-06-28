@@ -1,4 +1,3 @@
-import logging
 import structlog
 
 
@@ -14,5 +13,8 @@ def setup_logging():
         logger_factory=structlog.PrintLoggerFactory(),
     )
 
+
+# Configure at import time so logger is ready before lifespan runs
+setup_logging()
 
 logger = structlog.get_logger()
