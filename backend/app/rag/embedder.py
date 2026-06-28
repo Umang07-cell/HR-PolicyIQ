@@ -45,7 +45,7 @@ def embed_sparse(text: str) -> Tuple[List[int], List[float]]:
     Returns (indices, values) for Qdrant SparseVector.
 
     This is a deterministic TF-based fallback. Duplicate tokens accumulate weight.
-    Index space is 30 000 buckets (hash mod) — collision rate is low for short HR queries.
+    Index space is 30 000 buckets (hashlib.sha256 mod) — collision rate is low for short HR queries.
 
     Production upgrade path: when running bge-m3 via FlagEmbedding, replace this body with:
         from FlagEmbedding import BGEM3FlagModel
@@ -54,9 +54,10 @@ def embed_sparse(text: str) -> Tuple[List[int], List[float]]:
         lw = out["lexical_weights"][0]
         return [int(k) for k in lw.keys()], [float(v) for v in lw.values()]
     """
+    import hashlib
     tokens = text.lower().split()
     index_map: dict = {}
     for token in tokens:
-        idx = abs(hash(token)) % 30000
+        idx = int(hashlib.sha256(token.encode('utf-8')).hexdigest(), 16) % 30000
         index_map[idx] = index_map.get(idx, 0.0) + 1.0
     return list(index_map.keys()), list(index_map.values())

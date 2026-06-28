@@ -1,5 +1,10 @@
 [
-  {"input": "Aadhaar: 2345 6789 0123", "should_contain": "AADHAAR-REDACTED", "should_not_contain": "2345 6789 0123"},
-  {"input": "PAN: ABCDE1234F", "should_contain": "PAN-REDACTED", "should_not_contain": "ABCDE1234F"},
-  {"input": "Salary is 50000 per month", "should_not_contain": "2345"}
+  {"input": "My Aadhaar is 2345 6789 0123", "should_contain": "AADHAAR-REDACTED", "should_not_contain": "2345 6789 0123"},
+  {"input": "PAN number: ABCDE1234F", "should_contain": "PAN-REDACTED", "should_not_contain": "ABCDE1234F"},
+  {"input": "UAN: 100123456789", "should_contain": "UAN-REDACTED", "should_not_contain": "100123456789"},
+  {"input": "Aadhaar: 9876 5432 1098 and PAN: ZYXWV9876B", "should_contain": "AADHAAR-REDACTED", "should_not_contain": "9876 5432 1098"},
+  {"input": "The leave policy allows 12 days of casual leave.", "should_not_contain": "REDACTED"},
+  {"input": "Employee ID EMP001 is assigned to Engineering.", "should_not_contain": "REDACTED"},
+  {"input": "Contact your UAN helpdesk for EPF queries", "should_not_contain": "UAN-REDACTED"},
+  {"input": "Form 16 is linked to your PAN ABCDE1234F for tax filing", "should_contain": "PAN-REDACTED", "should_not_contain": "ABCDE1234F"}
 ]

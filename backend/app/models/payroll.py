@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Float, ForeignKey, JSON, UniqueConstraint
+from sqlalchemy import Column, Integer, String, Numeric, ForeignKey, JSON, UniqueConstraint
 from app.db.base import Base
 from app.models.base import TimestampMixin
 
@@ -12,10 +12,10 @@ class PayrollRecord(Base, TimestampMixin):
     id = Column(Integer, primary_key=True, index=True)
     employee_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
     month = Column(String(7), nullable=False)
-    basic = Column(Float, nullable=False)
-    hra = Column(Float, default=0.0)
-    allowances = Column(Float, default=0.0)
-    deductions = Column(Float, default=0.0)
-    net_salary = Column(Float, nullable=False)
-    tax_deducted = Column(Float, default=0.0)
+    basic = Column(Numeric(12, 2), nullable=False)
+    hra = Column(Numeric(12, 2), default=0.0)
+    allowances = Column(Numeric(12, 2), default=0.0)
+    deductions = Column(Numeric(12, 2), default=0.0)
+    net_salary = Column(Numeric(12, 2), nullable=False)
+    tax_deducted = Column(Numeric(12, 2), default=0.0)
     breakdown = Column(JSON, default=dict)

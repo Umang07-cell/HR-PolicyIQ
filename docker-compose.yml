@@ -11,6 +11,10 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      # C-05 FIX: mount init scripts so triggers and RLS are applied on first start
+      - ./infra/postgres/init.sql:/docker-entrypoint-initdb.d/01_init.sql
+      - ./infra/postgres/audit_triggers.sql:/docker-entrypoint-initdb.d/02_audit_triggers.sql
+      - ./infra/postgres/rls_policies.sql:/docker-entrypoint-initdb.d/03_rls_policies.sql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U hruser"]
       interval: 5s
@@ -23,11 +27,19 @@ services:
       - "6333:6333"
     volumes:
       - qdrant_data:/qdrant/storage
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:6333/healthz || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   redis:
     image: redis:7-alpine
     ports:
       - "6379:6379"
+    volumes:
+      - ./infra/redis/redis.conf:/usr/local/etc/redis/redis.conf
+    command: redis-server /usr/local/etc/redis/redis.conf
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
@@ -43,16 +55,23 @@ services:
       QDRANT_HOST: qdrant
       REDIS_URL: redis://redis:6379/0
       SECRET_KEY: "${SECRET_KEY:-change-this-in-production-use-openssl-rand-hex-32}"
+      GROQ_API_KEY: "${GROQ_API_KEY:-}"
       ALLOWED_ORIGINS: '["http://localhost", "http://localhost:80", "http://frontend"]'
+      ENVIRONMENT: development
     depends_on:
       postgres:
         condition: service_healthy
       qdrant:
-        condition: service_started
+        condition: service_healthy
       redis:
         condition: service_healthy
     volumes:
       - uploads_data:/app/uploads
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8000/health || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
 
   celery-worker:
     build: ./backend
@@ -62,13 +81,29 @@ services:
       QDRANT_HOST: qdrant
       REDIS_URL: redis://redis:6379/0
       SECRET_KEY: "${SECRET_KEY:-change-this-in-production-use-openssl-rand-hex-32}"
+      GROQ_API_KEY: "${GROQ_API_KEY:-}"
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
+      backend:
+        condition: service_healthy
     volumes:
       - uploads_data:/app/uploads
+    restart: unless-stopped
+
+  celery-beat:
+    build: ./backend
+    command: celery -A app.tasks.celery_app beat --loglevel=info
+    environment:
+      DATABASE_URL: postgresql://hruser:hrpass@postgres:5432/hrplatform
+      REDIS_URL: redis://redis:6379/0
+      SECRET_KEY: "${SECRET_KEY:-change-this-in-production-use-openssl-rand-hex-32}"
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
 
   frontend:
     build: ./frontend
@@ -77,7 +112,35 @@ services:
     depends_on:
       - backend
 
+  prometheus:
+    image: prom/prometheus:latest
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./infra/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.retention.time=15d"
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:latest
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: "${GRAFANA_PASSWORD:-admin}"
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./infra/grafana/dashboards:/etc/grafana/provisioning/dashboards
+    depends_on:
+      - prometheus
+    restart: unless-stopped
+
 volumes:
   postgres_data:
   qdrant_data:
   uploads_data:
+  prometheus_data:
+  grafana_data:

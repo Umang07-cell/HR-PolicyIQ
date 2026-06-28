@@ -1,39 +1,78 @@
-# RAG Pipeline Flow
+# RAG Pipeline Flow — HR PolicyIQ
+
+**Embedding model:** BGE-small-en-v1.5 (384-dim, CPU, ~130MB)
+**Reranker:** BGE-reranker-large (CPU, ~1.3GB, cached at startup)
+**LLM:** Llama 3.1 8B via Groq API (cloud inference, ~1-3s)
 
 ```
-User Query
+User Query (HTTP POST /chat/)
     │
     ▼
-Query Transform (expand synonyms, clean)
+JWT Validation (Layer 1 auth — mocked in dev)
+Role + department + location extracted
     │
     ▼
-BGE-M3 Embed Query → [1024-dim vector]
+Redis Cache Check
+SHA256(query + role + dept + location + module) → 24h TTL
+    │  HIT → return cached answer in <1ms
+    │  MISS ↓
+    ▼
+Query Transform
+Synonym expansion (20 HR domain synonym groups)
+Special char removal, whitespace normalisation
     │
     ▼
-Qdrant Search + ABAC Filter
-(role/dept/location filter runs INSIDE Qdrant)
+BGE-small-en-v1.5 Embedding
+Single forward pass → 384-dim dense vector
+Hash-based sparse vector (BM25-style) for keyword search
     │
     ▼
-Top-10 Chunks Retrieved
+Qdrant Parallel Hybrid Search (ABAC enforced inside DB)
+Dense HNSW search  +  Sparse BM25 search
+ABAC filter: access_roles, access_departments, access_locations
+Restricted chunks never leave Qdrant
     │
     ▼
-BGE Reranker → Top-5 Chunks
+RRF Fusion (Reciprocal Rank Fusion)
+Merges dense + sparse ranked lists by rank position
+Max 10 candidates
     │
     ▼
-Confidence Check (< 0.3 → fallback response)
+Confidence Gate (pre-rerank, early exit)
+If RRF score < 0.20 threshold → abstain
+"I could not find a clear policy — please contact HR"
+    │  PASS ↓
+    ▼
+BGE-reranker-large (Cross-Encoder)
+Scores each (query, chunk) pair jointly
+Selects top-5 chunks by rerank_score
     │
     ▼
-PII Redaction on Chunks
+Final Confidence Calculation
+confidence = 0.62 + 0.25×page_convergence + 0.10×score_spread
+If LLM abstains → confidence capped at 42%
     │
     ▼
-LLM Prompt (Ollama / vLLM)
+Presidio PII Redaction (Pre-LLM)
+Aadhaar / PAN / UAN regex + Presidio NER
+Chunk text sanitised before entering LLM context
     │
     ▼
-LLM Response
+Groq LLM — Llama 3.1 8B Instant
+System prompt: citation-per-sentence enforcement
+temperature=0.0, max_tokens=600
+Streaming (SSE) or blocking call
     │
     ▼
-PII Redaction on Output
+Presidio PII Redaction (Post-LLM)
+Final safety net on generated text
     │
     ▼
-Response + Citations → User
+Citation Formatting
+Relative score normalisation (top chunk = 100%)
+Drop-off threshold: hide citations >25% below top score
+    │
+    ▼
+Response + Citations + Confidence → User
+Async: RAGAS faithfulness log, Redis cache write, Audit log
 ```

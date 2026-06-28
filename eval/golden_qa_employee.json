@@ -1,5 +1,12 @@
 [
   {"question": "How many casual leaves am I entitled to?", "expected_answer": "12 casual leaves per year", "module": "leave"},
   {"question": "What is the notice period for resignation?", "expected_answer": "30 to 90 days depending on role", "module": "policy"},
-  {"question": "How do I apply for earned leave encashment?", "expected_answer": "Submit a request via HR portal before March 31", "module": "leave"}
+  {"question": "How do I apply for earned leave encashment?", "expected_answer": "Submit a request via HR portal before March 31", "module": "leave"},
+  {"question": "What are my salary components?", "expected_answer": "Basic, HRA, LTA, Medical Reimbursement, Conveyance, PDA, Food coupons, PF, ESIC, Performance Bonus", "module": "payroll"},
+  {"question": "When is my salary paid?", "expected_answer": "By the 31st of every month based on attendance", "module": "payroll"},
+  {"question": "How many sick leaves do I get per year?", "expected_answer": "10 sick leaves per year", "module": "leave"},
+  {"question": "What is the code of conduct for employees?", "expected_answer": "Employees must maintain professional conduct, respect colleagues, and comply with company policies", "module": "policy"},
+  {"question": "How do I report a grievance?", "expected_answer": "Submit a grievance through the HR portal or contact your HR manager directly", "module": "policy"},
+  {"question": "What is the work from home policy?", "expected_answer": "Work from home must be pre-approved by the manager", "module": "policy"},
+  {"question": "Can casual leave be carried forward?", "expected_answer": "No, casual leave cannot be carried forward to the next year", "module": "leave"}
 ]

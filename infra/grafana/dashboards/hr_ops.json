@@ -1,1 +1,80 @@
-{"title":"hr_ops","panels":[],"schemaVersion":38}
+{
+  "title": "HR PolicyIQ — Operations",
+  "uid": "hr-ops-001",
+  "schemaVersion": 38,
+  "refresh": "30s",
+  "time": {"from": "now-3h", "to": "now"},
+  "panels": [
+    {
+      "id": 1,
+      "title": "Request Rate (req/min)",
+      "type": "stat",
+      "gridPos": {"x": 0, "y": 0, "w": 6, "h": 4},
+      "targets": [{
+        "expr": "rate(http_requests_total{job=\"hr-backend\"}[1m]) * 60",
+        "legendFormat": "req/min"
+      }]
+    },
+    {
+      "id": 2,
+      "title": "LLM Request Duration (p95)",
+      "type": "stat",
+      "gridPos": {"x": 6, "y": 0, "w": 6, "h": 4},
+      "targets": [{
+        "expr": "histogram_quantile(0.95, rate(llm_request_duration_seconds_bucket[5m]))",
+        "legendFormat": "p95 latency"
+      }]
+    },
+    {
+      "id": 3,
+      "title": "RAG Abstain Rate",
+      "type": "stat",
+      "gridPos": {"x": 12, "y": 0, "w": 6, "h": 4},
+      "targets": [{
+        "expr": "rate(rag_abstain_total[5m])",
+        "legendFormat": "abstains/sec"
+      }]
+    },
+    {
+      "id": 4,
+      "title": "Cache Hit Rate",
+      "type": "stat",
+      "gridPos": {"x": 18, "y": 0, "w": 6, "h": 4},
+      "targets": [{
+        "expr": "rate(cache_hit_total[5m]) / (rate(cache_hit_total[5m]) + rate(http_requests_total{handler=\"/chat/\"}[5m]))",
+        "legendFormat": "hit rate"
+      }]
+    },
+    {
+      "id": 5,
+      "title": "HTTP Request Latency (p50/p95/p99)",
+      "type": "timeseries",
+      "gridPos": {"x": 0, "y": 4, "w": 24, "h": 8},
+      "targets": [
+        {"expr": "histogram_quantile(0.50, rate(http_request_duration_seconds_bucket{job=\"hr-backend\"}[5m]))", "legendFormat": "p50"},
+        {"expr": "histogram_quantile(0.95, rate(http_request_duration_seconds_bucket{job=\"hr-backend\"}[5m]))", "legendFormat": "p95"},
+        {"expr": "histogram_quantile(0.99, rate(http_request_duration_seconds_bucket{job=\"hr-backend\"}[5m]))", "legendFormat": "p99"}
+      ]
+    },
+    {
+      "id": 6,
+      "title": "HTTP Error Rate (4xx / 5xx)",
+      "type": "timeseries",
+      "gridPos": {"x": 0, "y": 12, "w": 12, "h": 8},
+      "targets": [
+        {"expr": "rate(http_requests_total{status=~\"4..\",job=\"hr-backend\"}[5m])", "legendFormat": "4xx"},
+        {"expr": "rate(http_requests_total{status=~\"5..\",job=\"hr-backend\"}[5m])", "legendFormat": "5xx"}
+      ]
+    },
+    {
+      "id": 7,
+      "title": "LLM Calls / minute",
+      "type": "timeseries",
+      "gridPos": {"x": 12, "y": 12, "w": 12, "h": 8},
+      "targets": [{
+        "expr": "rate(llm_request_duration_seconds_count[1m]) * 60",
+        "legendFormat": "LLM calls/min"
+      }]
+    }
+  ]
+}

@@ -1,4 +1,7 @@
 [
   {"question": "How do I approve a leave request?", "expected_answer": "Go to Leave > Pending Approval and click Approve", "module": "leave"},
-  {"question": "What is the performance review cycle?", "expected_answer": "Half-yearly — H1 and H2", "module": "performance"}
+  {"question": "What is the performance review cycle?", "expected_answer": "Half-yearly — H1 (April-September) and H2 (October-March)", "module": "performance"},
+  {"question": "How do I submit a performance appraisal for my team?", "expected_answer": "Create a review in the Performance module, rate goals and achievements, then submit", "module": "performance"},
+  {"question": "What leave types can I approve for my team?", "expected_answer": "Casual leave, earned leave, and sick leave — maternity and paternity require HR admin approval", "module": "leave"},
+  {"question": "Can I see payroll details for my team members?", "expected_answer": "Managers can view team payroll summaries but not individual breakdowns — contact HR admin for details", "module": "payroll"}
 ]

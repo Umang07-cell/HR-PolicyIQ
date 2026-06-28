@@ -85,13 +85,13 @@ async def run_rag_pipeline(
     clean_chunks = []
     for c in chunks:
         c_copy = dict(c)
-        c_copy["text"] = filter_pii(c["text"], use_presidio=True)
+        c_copy["text"] = filter_pii(c["text"], use_presidio=False)
         clean_chunks.append(c_copy)
 
     from app.rag.prompt_templates import HR_SYSTEM_PROMPT, build_rag_prompt
     prompt = build_rag_prompt(query, clean_chunks)
     llm_answer = await _call_llm(HR_SYSTEM_PROMPT, prompt)
-    llm_answer = filter_pii(llm_answer, use_presidio=True)
+    llm_answer = filter_pii(llm_answer, use_presidio=False)
 
     confidence = compute_confidence_from_rerank(clean_chunks, llm_answer=llm_answer)
 
@@ -185,7 +185,7 @@ async def run_rag_pipeline_stream(
     clean_chunks = []
     for c in chunks:
         c_copy = dict(c)
-        c_copy["text"] = filter_pii(c["text"], use_presidio=True)
+        c_copy["text"] = filter_pii(c["text"], use_presidio=False)
         clean_chunks.append(c_copy)
 
     from app.rag.prompt_templates import HR_SYSTEM_PROMPT, build_rag_prompt
@@ -197,7 +197,7 @@ async def run_rag_pipeline_stream(
         full_answer += clean_token
         yield {"type": "token", "text": clean_token}
 
-    full_answer = filter_pii(full_answer, use_presidio=True)
+    full_answer = filter_pii(full_answer, use_presidio=False)
     confidence = compute_confidence_from_rerank(clean_chunks, llm_answer=full_answer)
 
     from app.rag.citation import format_citations

@@ -1,6 +1,10 @@
 [
-  {"user_role": "employee", "document_access_roles": ["hr_admin"], "expected_accessible": false},
-  {"user_role": "hr_admin", "document_access_roles": ["hr_admin"], "expected_accessible": true},
-  {"user_role": "manager", "document_access_roles": ["employee", "manager"], "expected_accessible": true},
-  {"user_role": "employee", "document_access_roles": ["all"], "expected_accessible": true}
+  {"user_role": "employee", "document_access_roles": ["hr_admin"], "expected_accessible": false, "description": "Employee cannot access hr_admin-only document"},
+  {"user_role": "hr_admin", "document_access_roles": ["hr_admin"], "expected_accessible": true, "description": "HR admin can access hr_admin document"},
+  {"user_role": "manager", "document_access_roles": ["employee", "manager"], "expected_accessible": true, "description": "Manager can access employee+manager document"},
+  {"user_role": "employee", "document_access_roles": ["all"], "expected_accessible": true, "description": "All-access document visible to employee"},
+  {"user_role": "employee", "document_access_roles": ["manager", "hr_admin"], "expected_accessible": false, "description": "Employee blocked from manager-only document"},
+  {"user_role": "executive", "document_access_roles": ["hr_admin", "executive"], "expected_accessible": true, "description": "Executive can access executive document"},
+  {"user_role": "employee", "document_access_roles": ["employee"], "expected_accessible": true, "description": "Employee can access employee document"},
+  {"user_role": "manager", "document_access_roles": ["all"], "expected_accessible": true, "description": "Manager can access all-access document"}
 ]

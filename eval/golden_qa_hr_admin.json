@@ -1,4 +1,8 @@
 [
-  {"question": "How is PII handled in the system?", "expected_answer": "Presidio redacts PII before chunks reach the LLM", "module": "policy"},
-  {"question": "What is the ABAC policy for payroll documents?", "expected_answer": "Payroll documents are restricted to manager and hr_admin roles", "module": "payroll"}
+  {"question": "How is PII handled in the system?", "expected_answer": "Presidio redacts PII before chunks reach the LLM and again on LLM output before returning to the user", "module": "policy"},
+  {"question": "What is the ABAC policy for payroll documents?", "expected_answer": "Payroll documents are restricted to manager and hr_admin roles via access_roles tags in Qdrant", "module": "payroll"},
+  {"question": "How do I upload a new HR policy document?", "expected_answer": "Go to Documents > Upload, select the file, set the module and access roles, then submit", "module": "policy"},
+  {"question": "What compliance standards does the platform meet?", "expected_answer": "IT Act 2000, DPDP Act 2023, ISO 27001, and SOC 2 alignment", "module": "policy"},
+  {"question": "How are audit logs protected from tampering?", "expected_answer": "Database-level triggers prevent DELETE and UPDATE on the audit_logs table — logs are append-only", "module": "policy"},
+  {"question": "What is the data retention policy for audit logs?", "expected_answer": "Audit logs are retained indefinitely as they are append-only and cannot be deleted", "module": "policy"}
 ]

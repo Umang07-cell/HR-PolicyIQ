@@ -1,6 +1,12 @@
 import { useState } from "react";
 import { useAuth } from "../hooks/useAuth";
 
+const TEST_ACCOUNTS = [
+  { role: "Employee", email: "employee@hr.com", pass: "employee123", color: "slate" },
+  { role: "Manager", email: "manager@hr.com", pass: "manager123", color: "violet" },
+  { role: "HR Admin", email: "hradmin@hr.com", pass: "admin123", color: "blue" },
+];
+
 export default function LoginPage() {
   const { login } = useAuth();
   const [form, setForm] = useState({ email: "", password: "" });
@@ -10,7 +16,7 @@ export default function LoginPage() {
 
   const submit = async () => {
     if (!form.email || !form.password) {
-      setError("Please enter your email and password.");
+      setError("Enter your email and password to continue.");
       return;
     }
     setLoading(true);
@@ -25,63 +31,73 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 flex items-center justify-center p-4">
-      {/* Background grid */}
-      <div className="absolute inset-0 bg-[linear-gradient(to_right,#1e293b1a_1px,transparent_1px),linear-gradient(to_bottom,#1e293b1a_1px,transparent_1px)] bg-[size:64px_64px] pointer-events-none" />
+    <div className="min-h-screen mesh-bg flex items-center justify-center p-4 relative overflow-hidden">
+      {/* Subtle background orbs */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none" aria-hidden>
+        <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-blue-600/5 rounded-full blur-3xl" />
+        <div className="absolute bottom-1/4 right-1/4 w-80 h-80 bg-indigo-600/5 rounded-full blur-3xl" />
+      </div>
 
-      <div className="relative w-full max-w-sm">
-        {/* Logo */}
+      <div className="relative w-full max-w-[22rem] animate-fade-in">
+        {/* Logo mark */}
         <div className="text-center mb-8">
-          <div className="w-14 h-14 rounded-2xl bg-blue-600 flex items-center justify-center mx-auto mb-4 shadow-lg shadow-blue-500/25">
+          <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-blue-500 to-blue-700 flex items-center justify-center mx-auto mb-5 shadow-lg shadow-blue-600/30">
             <svg className="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
             </svg>
           </div>
           <h1 className="text-2xl font-bold text-white tracking-tight">HR Platform</h1>
-          <p className="text-slate-400 text-sm mt-1">Sign in to your workspace</p>
+          <p className="text-slate-400 text-sm mt-1.5">Sign in to your workspace</p>
         </div>
 
-        {/* Card */}
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl">
+        {/* Login card */}
+        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-modal">
           {error && (
-            <div className="mb-4 p-3 bg-red-900/30 border border-red-800 rounded-xl flex items-center gap-2">
-              <svg className="w-4 h-4 text-red-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            <div className="mb-5 p-3 bg-red-950/60 border border-red-900/50 rounded-xl flex items-start gap-2.5 animate-fade-in">
+              <svg className="w-4 h-4 text-red-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
               </svg>
-              <p className="text-red-300 text-sm">{error}</p>
+              <p className="text-red-300 text-sm leading-snug">{error}</p>
             </div>
           )}
 
           <div className="space-y-4">
             <div>
-              <label className="block text-xs font-medium text-slate-400 mb-1.5">Email address</label>
+              <label className="block text-xs font-medium text-slate-400 mb-1.5" htmlFor="email">
+                Email address
+              </label>
               <input
+                id="email"
                 value={form.email}
                 onChange={(e) => setForm({ ...form, email: e.target.value })}
                 type="email"
                 placeholder="you@company.com"
                 autoComplete="email"
-                className="w-full bg-slate-800 border border-slate-700 text-slate-100 placeholder-slate-500 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                className="w-full bg-slate-800 border border-slate-700 text-slate-100 placeholder-slate-500 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/80 focus:border-blue-500/50 transition-all"
               />
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-slate-400 mb-1.5">Password</label>
+              <label className="block text-xs font-medium text-slate-400 mb-1.5" htmlFor="password">
+                Password
+              </label>
               <div className="relative">
                 <input
+                  id="password"
                   value={form.password}
                   onChange={(e) => setForm({ ...form, password: e.target.value })}
                   type={showPassword ? "text" : "password"}
                   placeholder="••••••••"
                   autoComplete="current-password"
                   onKeyDown={(e) => e.key === "Enter" && submit()}
-                  className="w-full bg-slate-800 border border-slate-700 text-slate-100 placeholder-slate-500 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all pr-10"
+                  className="w-full bg-slate-800 border border-slate-700 text-slate-100 placeholder-slate-500 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/80 focus:border-blue-500/50 transition-all pr-11"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword((v) => !v)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 transition-colors p-0.5"
                   tabIndex={-1}
+                  aria-label={showPassword ? "Hide password" : "Show password"}
                 >
                   {showPassword ? (
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -89,7 +105,8 @@ export default function LoginPage() {
                     </svg>
                   ) : (
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
                     </svg>
                   )}
                 </button>
@@ -99,43 +116,41 @@ export default function LoginPage() {
             <button
               onClick={submit}
               disabled={loading}
-              className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-blue-800 disabled:cursor-not-allowed text-white font-semibold py-2.5 rounded-xl text-sm transition-colors flex items-center justify-center gap-2"
+              className="w-full bg-blue-600 hover:bg-blue-500 active:bg-blue-700 disabled:bg-blue-800 disabled:cursor-not-allowed text-white font-semibold py-2.5 rounded-xl text-sm transition-all duration-150 flex items-center justify-center gap-2 shadow-sm"
             >
-              {loading && (
-                <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                </svg>
-              )}
-              {loading ? "Signing in..." : "Sign in"}
+              {loading ? (
+                <>
+                  <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                  </svg>
+                  Signing in…
+                </>
+              ) : "Sign in"}
             </button>
           </div>
         </div>
 
-        {/* Test accounts */}
-        <div className="mt-4 bg-slate-900/50 border border-slate-800 rounded-xl p-4">
-          <p className="text-xs font-semibold text-slate-500 mb-2 uppercase tracking-wider">Development accounts</p>
-          <div className="space-y-1.5">
-            {[
-              { role: "Employee", email: "employee@hr.com", pass: "employee123" },
-              { role: "Manager", email: "manager@hr.com", pass: "manager123" },
-              { role: "HR Admin", email: "hradmin@hr.com", pass: "admin123" },
-            ].map((a) => (
+        {/* Dev accounts */}
+        <div className="mt-4 bg-slate-900/70 border border-slate-800 rounded-2xl overflow-hidden">
+          <div className="px-4 pt-3 pb-2">
+            <p className="text-2xs font-semibold text-slate-500 uppercase tracking-widest">Dev accounts</p>
+          </div>
+          <div className="divide-y divide-slate-800">
+            {TEST_ACCOUNTS.map((a) => (
               <button
                 key={a.role}
                 onClick={() => setForm({ email: a.email, password: a.pass })}
-                className="w-full text-left px-3 py-2 rounded-lg hover:bg-slate-800 transition-colors group"
+                className="w-full flex items-center justify-between px-4 py-2.5 hover:bg-slate-800 transition-colors group"
               >
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-medium text-slate-300 group-hover:text-white">{a.role}</span>
-                  <span className="text-xs text-slate-600">{a.email}</span>
-                </div>
+                <span className="text-xs font-medium text-slate-300 group-hover:text-white transition-colors">{a.role}</span>
+                <span className="text-2xs text-slate-600 font-mono">{a.email}</span>
               </button>
             ))}
           </div>
         </div>
 
-        <p className="text-center text-xs text-slate-700 mt-6">
+        <p className="text-center text-2xs text-slate-700 mt-5">
           On-premise · Zero data egress · DPDP compliant
         </p>
       </div>

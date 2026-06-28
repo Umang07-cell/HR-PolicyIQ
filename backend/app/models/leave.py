@@ -23,12 +23,12 @@ class LeaveStatus(str, enum.Enum):
 class LeaveRequest(Base, TimestampMixin):
     __tablename__ = "leave_requests"
     id = Column(Integer, primary_key=True, index=True)
-    employee_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    employee_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
     leave_type = Column(SAEnum(LeaveType), nullable=False)
     start_date = Column(Date, nullable=False)
     end_date = Column(Date, nullable=False)
     days = Column(Integer, nullable=False)
     reason = Column(Text, nullable=True)
     status = Column(SAEnum(LeaveStatus), default=LeaveStatus.pending, nullable=False)
-    approver_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    approver_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
     approver_comment = Column(Text, nullable=True)

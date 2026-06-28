@@ -58,6 +58,7 @@ async def upload_document(
     access_roles: str = Form("employee,manager,hr_admin"),
     access_departments: str = Form(""),
     access_locations: str = Form(""),
+    background_tasks: BackgroundTasks = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_role("hr_admin", "executive")),
 ):
@@ -67,17 +68,25 @@ async def upload_document(
     if file.content_type not in ALLOWED_CONTENT_TYPES:
         raise HTTPException(status_code=415, detail=f"Unsupported file type: {file.content_type}")
 
+    # Check size first before reading
     max_bytes = settings.MAX_FILE_SIZE_MB * 1024 * 1024
-    content = await file.read()
-    if len(content) > max_bytes:
+    if hasattr(file, 'size') and file.size and file.size > max_bytes:
         raise HTTPException(status_code=413, detail=f"File too large. Max {settings.MAX_FILE_SIZE_MB}MB.")
 
+    # Read in chunks to avoid memory exhaustion
     os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
     safe_name = _safe_filename(file.filename or "upload")
     file_path = os.path.join(settings.UPLOAD_DIR, safe_name)
 
+    bytes_read = 0
     with open(file_path, "wb") as f:
-        f.write(content)
+        while chunk := await file.read(8192):
+            bytes_read += len(chunk)
+            if bytes_read > max_bytes:
+                f.close()
+                os.remove(file_path)
+                raise HTTPException(status_code=413, detail=f"File too large. Max {settings.MAX_FILE_SIZE_MB}MB.")
+            f.write(chunk)
 
     if not _validate_magic_bytes(file_path, file.content_type):
         os.remove(file_path)
@@ -91,7 +100,7 @@ async def upload_document(
         title=title,
         filename=safe_name,
         file_path=file_path,
-        file_size=len(content),
+        file_size=bytes_read,
         content_type=file.content_type,
         module=module,
         description=description,

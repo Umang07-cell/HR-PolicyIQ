@@ -1,58 +1,93 @@
+import { useEffect } from "react";
 import { useNotificationStore } from "../../store/notificationStore";
 
-const icons = {
-  success: (
-    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-    </svg>
-  ),
-  error: (
-    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-    </svg>
-  ),
-  info: (
-    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-    </svg>
-  ),
+const config = {
+  success: {
+    icon: (
+      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+      </svg>
+    ),
+    wrapper: "bg-slate-900 border-emerald-500/40",
+    iconBg: "bg-emerald-500/15 text-emerald-400",
+    text: "text-slate-200",
+    bar: "bg-emerald-500",
+  },
+  error: {
+    icon: (
+      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
+      </svg>
+    ),
+    wrapper: "bg-slate-900 border-red-500/40",
+    iconBg: "bg-red-500/15 text-red-400",
+    text: "text-slate-200",
+    bar: "bg-red-500",
+  },
+  info: {
+    icon: (
+      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+      </svg>
+    ),
+    wrapper: "bg-slate-900 border-blue-500/40",
+    iconBg: "bg-blue-500/15 text-blue-400",
+    text: "text-slate-200",
+    bar: "bg-blue-500",
+  },
 };
 
-const styles = {
-  success: "bg-slate-900 border-green-500/50 text-green-300",
-  error: "bg-slate-900 border-red-500/50 text-red-300",
-  info: "bg-slate-900 border-blue-500/50 text-blue-300",
-};
+const ToastItem = ({
+  notification,
+  onRemove,
+}: {
+  notification: { id: string; message: string; type: "success" | "error" | "info" };
+  onRemove: (id: string) => void;
+}) => {
+  const c = config[notification.type];
 
-const iconBg = {
-  success: "bg-green-500/20 text-green-400",
-  error: "bg-red-500/20 text-red-400",
-  info: "bg-blue-500/20 text-blue-400",
+  useEffect(() => {
+    const timer = setTimeout(() => onRemove(notification.id), 4000);
+    return () => clearTimeout(timer);
+  }, [notification.id, onRemove]);
+
+  return (
+    <div
+      className={`relative flex items-start gap-3 px-4 py-3.5 rounded-xl border shadow-elevated overflow-hidden animate-slide-up ${c.wrapper}`}
+      role="alert"
+    >
+      {/* Progress bar */}
+      <div className={`absolute bottom-0 left-0 h-0.5 ${c.bar} animate-[shrink_4s_linear_forwards]`} style={{ width: "100%" }} />
+
+      <div className={`w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5 ${c.iconBg}`}>
+        {c.icon}
+      </div>
+      <p className={`text-sm font-medium flex-1 leading-relaxed pt-0.5 ${c.text}`}>{notification.message}</p>
+      <button
+        onClick={() => onRemove(notification.id)}
+        className="text-slate-600 hover:text-slate-300 transition-colors flex-shrink-0 mt-0.5"
+        aria-label="Dismiss"
+      >
+        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+        </svg>
+      </button>
+    </div>
+  );
 };
 
 export const Toast = () => {
   const { notifications, remove } = useNotificationStore();
+  if (notifications.length === 0) return null;
+
   return (
-    <div className="fixed bottom-4 right-4 z-50 flex flex-col gap-2 max-w-sm w-full">
+    <div
+      className="fixed bottom-5 right-5 z-50 flex flex-col gap-2 w-80 max-w-[calc(100vw-2.5rem)]"
+      aria-live="polite"
+      aria-atomic="true"
+    >
       {notifications.map((n) => (
-        <div
-          key={n.id}
-          className={`flex items-start gap-3 px-4 py-3 rounded-xl border shadow-2xl animate-slide-up ${styles[n.type]}`}
-        >
-          <div className={`w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5 ${iconBg[n.type]}`}>
-            {icons[n.type]}
-          </div>
-          <span className="text-sm font-medium text-slate-200 flex-1 leading-relaxed">{n.message}</span>
-          <button
-            onClick={() => remove(n.id)}
-            className="text-slate-500 hover:text-slate-300 transition-colors flex-shrink-0"
-            aria-label="Dismiss"
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-        </div>
+        <ToastItem key={n.id} notification={n} onRemove={remove} />
       ))}
     </div>
   );

@@ -1,5 +1,6 @@
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Query
 from typing import Dict, List, Optional
+from app.core.security import decode_token
 
 router = APIRouter(prefix="/ws", tags=["WebSocket"])
 
@@ -34,12 +35,21 @@ manager = ConnectionManager()
 async def notifications_ws(
     websocket: WebSocket,
     user_id: int,
-    role: Optional[str] = Query(default="employee"),
+    token: Optional[str] = Query(default=None),
 ):
-    # Basic validation: role must be a known value
-    allowed_roles = {"employee", "manager", "hr_admin", "executive"}
-    if role not in allowed_roles:
-        await websocket.close(code=4003)
+    # Authenticate via token
+    if not token:
+        await websocket.close(code=4401, reason="Missing token")
+        return
+
+    payload = decode_token(token)
+    if not payload:
+        await websocket.close(code=4401, reason="Invalid or expired token")
+        return
+
+    authenticated_user_id = payload.get("sub")
+    if not authenticated_user_id or int(authenticated_user_id) != user_id:
+        await websocket.close(code=4403, reason="Forbidden")
         return
 
     await manager.connect(user_id, websocket)
