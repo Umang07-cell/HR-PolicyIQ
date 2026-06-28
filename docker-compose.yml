@@ -16,7 +16,7 @@ services:
       - ./infra/postgres/audit_triggers.sql:/docker-entrypoint-initdb.d/02_audit_triggers.sql
       - ./infra/postgres/rls_policies.sql:/docker-entrypoint-initdb.d/03_rls_policies.sql
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U hruser"]
+      test: ["CMD-SHELL", "pg_isready -U hruser -d hrplatform"]
       interval: 5s
       timeout: 5s
       retries: 5

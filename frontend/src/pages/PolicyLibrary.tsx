@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { listDocuments, archiveDocument } from "../api/documents";
+import { listDocuments, archiveDocument, hardDeleteDocument } from "../api/documents";
 import { DocumentUploader } from "../components/documents/DocumentUploader";
 import { Modal } from "../components/common/Modal";
 import { Badge } from "../components/common/Badge";
@@ -32,6 +32,7 @@ export default function PolicyLibrary() {
   const [module, setModule] = useState("");
   const [search, setSearch] = useState("");
   const [showUpload, setShowUpload] = useState(false);
+  const [documentToDelete, setDocumentToDelete] = useState<{id: number, title: string} | null>(null);
   const [loading, setLoading] = useState(true);
   const { canUploadDocs } = usePermissions();
   const { add: notify } = useNotificationStore();
@@ -58,6 +59,17 @@ export default function PolicyLibrary() {
       load();
     } catch {
       notify("Failed to archive document", "error");
+    }
+  };
+
+  const executeDelete = async (id: number) => {
+    try {
+      await hardDeleteDocument(id);
+      notify("Document permanently deleted", "success");
+      setDocumentToDelete(null);
+      load();
+    } catch {
+      notify("Failed to delete document", "error");
     }
   };
 
@@ -205,15 +217,26 @@ export default function PolicyLibrary() {
                   <div className="flex items-center gap-2 flex-shrink-0">
                     <Badge label={d.status} />
                     {canUploadDocs && d.status !== "archived" && (
-                      <button
-                        onClick={() => handleArchive(d.id, d.title)}
-                        className="p-1.5 text-slate-300 hover:text-red-500 rounded-lg hover:bg-red-50 transition-colors opacity-0 group-hover:opacity-100"
-                        title="Archive document"
-                      >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
-                        </svg>
-                      </button>
+                      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button
+                          onClick={() => handleArchive(d.id, d.title)}
+                          className="p-1.5 text-slate-300 hover:text-amber-500 rounded-lg hover:bg-amber-50 transition-colors"
+                          title="Archive document"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
+                          </svg>
+                        </button>
+                        <button
+                          onClick={() => setDocumentToDelete({ id: d.id, title: d.title })}
+                          className="p-1.5 text-slate-300 hover:text-red-500 rounded-lg hover:bg-red-50 transition-colors"
+                          title="Permanently delete document"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          </svg>
+                        </button>
+                      </div>
                     )}
                   </div>
                 </div>
@@ -230,6 +253,19 @@ export default function PolicyLibrary() {
           onClose={() => setShowUpload(false)}
         >
           <DocumentUploader onSuccess={() => { setShowUpload(false); load(); }} />
+        </Modal>
+      )}
+
+      {documentToDelete && (
+        <Modal
+          title="Delete Policy"
+          description={`Are you sure you want to permanently delete "${documentToDelete.title}"? This action cannot be undone and will remove the document from the AI search.`}
+          onClose={() => setDocumentToDelete(null)}
+        >
+          <div className="flex justify-end gap-3 mt-6">
+            <Button variant="secondary" onClick={() => setDocumentToDelete(null)}>Cancel</Button>
+            <Button variant="danger" onClick={() => executeDelete(documentToDelete.id)}>Delete Permanently</Button>
+          </div>
         </Modal>
       )}
     </div>

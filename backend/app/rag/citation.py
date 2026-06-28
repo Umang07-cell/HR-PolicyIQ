@@ -4,13 +4,9 @@ import math
 DROP_THRESHOLD = 0.25
 
 
-def _relative_score(rerank_scores: List[float], idx: int) -> float:
-    min_s = min(rerank_scores)
-    max_s = max(rerank_scores)
-    if max_s == min_s:
-        return 1.0
-    normalised = (rerank_scores[idx] - min_s) / (max_s - min_s)
-    return round(0.60 + 0.40 * normalised, 3)
+def _absolute_score(rerank_score: float) -> float:
+    # CrossEncoder already outputs probabilities (0-1), no sigmoid needed
+    return round(float(rerank_score), 3)
 
 
 def _normalise_rrf(score: float) -> float:
@@ -22,9 +18,6 @@ def format_citations(chunks: List[Dict]) -> List[Dict]:
     seen_ids = set()
     citations = []
 
-    rerank_scores = [c["rerank_score"] for c in chunks if "rerank_score" in c]
-    use_relative = len(rerank_scores) == len(chunks)
-
     for i, c in enumerate(chunks):
         doc_id = c.get("document_id")
         page = c.get("page")
@@ -35,11 +28,10 @@ def format_citations(chunks: List[Dict]) -> List[Dict]:
             continue
         seen_ids.add(chunk_key)
 
-        score = (
-            _relative_score(rerank_scores, i)
-            if use_relative
-            else _normalise_rrf(c.get("score", 0.0))
-        )
+        if "rerank_score" in c:
+            score = _absolute_score(c["rerank_score"])
+        else:
+            score = _normalise_rrf(c.get("score", 0.0))
 
         citations.append({
             "document_id": doc_id,

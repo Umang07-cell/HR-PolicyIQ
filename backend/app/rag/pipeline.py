@@ -64,8 +64,11 @@ async def run_rag_pipeline(
         logger.error("retrieval_failed", error=str(e))
         chunks = []
 
+    logger.info("chunks_retrieved", count=len(chunks), query=query[:50])
+
     from app.rag.confidence import should_abstain, compute_confidence_from_rerank, confidence_label
     if should_abstain(chunks):
+        logger.info("abstaining", chunks_count=len(chunks))
         return {
             "answer": "I could not find a clear policy for this in the available HR documents. Please contact HR directly.",
             "citations": [],
@@ -167,8 +170,11 @@ async def run_rag_pipeline_stream(
         logger.error("retrieval_failed", error=str(e))
         chunks = []
 
+    logger.info("chunks_retrieved_stream", count=len(chunks), query=query[:50])
+
     from app.rag.confidence import should_abstain, compute_confidence_from_rerank, confidence_label
     if should_abstain(chunks):
+        logger.info("abstaining_stream", chunks_count=len(chunks))
         yield {
             "type": "abstain",
             "text": "I could not find a clear policy for this in the available HR documents. Please contact HR directly.",
@@ -195,7 +201,9 @@ async def run_rag_pipeline_stream(
     async for token in _call_llm_stream(HR_SYSTEM_PROMPT, prompt):
         clean_token = filter_pii(token, use_presidio=False)
         full_answer += clean_token
-        yield {"type": "token", "text": clean_token}
+        for char in clean_token:
+            yield {"type": "token", "text": char}
+            await asyncio.sleep(0.01)
 
     full_answer = filter_pii(full_answer, use_presidio=False)
     confidence = compute_confidence_from_rerank(clean_chunks, llm_answer=full_answer)
@@ -245,8 +253,9 @@ async def _call_llm(system_prompt: str, user_prompt: str) -> str:
 
 async def _call_llm_stream(system_prompt: str, user_prompt: str) -> AsyncGenerator[str, None]:
     try:
-        client = _get_groq()
-        stream = client.chat.completions.create(
+        from groq import AsyncGroq
+        client = AsyncGroq(api_key=settings.GROQ_API_KEY)
+        stream = await client.chat.completions.create(
             model=settings.LLM_MODEL,
             messages=[
                 {"role": "system", "content": system_prompt},
@@ -256,7 +265,7 @@ async def _call_llm_stream(system_prompt: str, user_prompt: str) -> AsyncGenerat
             max_tokens=600,
             stream=True,
         )
-        for chunk in stream:
+        async for chunk in stream:
             token = chunk.choices[0].delta.content
             if token:
                 yield token

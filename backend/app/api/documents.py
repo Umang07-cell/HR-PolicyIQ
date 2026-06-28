@@ -195,3 +195,44 @@ def archive_document(
     db.commit()
     log_action(db, current_user.id, "DOCUMENT_ARCHIVE", "document", str(doc_id))
     return {"message": "Document archived"}
+
+
+@router.delete("/{doc_id}/hard", summary="Permanently delete a document (HR Admin only)")
+def delete_document_hard(
+    doc_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role("hr_admin")),
+):
+    doc = db.query(Document).filter(Document.id == doc_id).first()
+    if not doc:
+        raise HTTPException(status_code=404, detail="Document not found")
+        
+    if doc.is_indexed:
+        try:
+            from app.db.qdrant_client import get_qdrant
+            from qdrant_client.models import Filter, FieldCondition, MatchValue
+            client = get_qdrant()
+            client.delete(
+                collection_name=settings.QDRANT_COLLECTION,
+                points_selector=Filter(
+                    must=[
+                        FieldCondition(
+                            key="document_id",
+                            match=MatchValue(value=doc_id),
+                        )
+                    ]
+                )
+            )
+        except Exception:
+            pass
+
+    if doc.file_path and os.path.exists(doc.file_path):
+        try:
+            os.remove(doc.file_path)
+        except Exception:
+            pass
+
+    db.delete(doc)
+    db.commit()
+    log_action(db, current_user.id, "DOCUMENT_DELETE_HARD", "document", str(doc_id))
+    return {"message": "Document permanently deleted"}

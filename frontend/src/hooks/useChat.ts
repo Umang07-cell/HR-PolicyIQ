@@ -8,8 +8,8 @@ export const useChat = () => {
 
   const send = async (query: string, module?: string) => {
     addMessage({ role: "user", content: query });
-    addMessage({ role: "assistant", content: "", citations: [], confidence: undefined, streaming: true });
     setLoading(true);
+    let assistantMessageAdded = false;
 
     try {
       const token = localStorage.getItem("token");
@@ -45,8 +45,19 @@ export const useChat = () => {
             const event = JSON.parse(raw);
 
             if (event.type === "token") {
-              updateLastMessage({ appendContent: event.text });
+              if (!assistantMessageAdded) {
+                setLoading(false);
+                addMessage({ role: "assistant", content: event.text, citations: [], confidence: undefined, streaming: true });
+                assistantMessageAdded = true;
+              } else {
+                updateLastMessage({ appendContent: event.text });
+              }
             } else if (event.type === "done") {
+              if (!assistantMessageAdded) {
+                setLoading(false);
+                addMessage({ role: "assistant", content: "", citations: [], confidence: undefined, streaming: true });
+                assistantMessageAdded = true;
+              }
               updateLastMessage({
                 citations: event.citations,
                 confidence: event.confidence,
@@ -54,7 +65,13 @@ export const useChat = () => {
                 streaming: false,
               });
             } else if (event.type === "abstain") {
-              updateLastMessage({ content: event.text, streaming: false });
+              if (!assistantMessageAdded) {
+                setLoading(false);
+                addMessage({ role: "assistant", content: event.text, citations: [], confidence: undefined, streaming: false });
+                assistantMessageAdded = true;
+              } else {
+                updateLastMessage({ content: event.text, streaming: false });
+              }
             }
           } catch {
             // malformed SSE line, skip

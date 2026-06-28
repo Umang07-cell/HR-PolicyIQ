@@ -3,6 +3,7 @@ from qdrant_client.models import Filter, FieldCondition, MatchAny, MatchValue, S
 from app.db.qdrant_client import get_qdrant
 from app.rag.embedder import embed_query, embed_sparse
 from app.core.config import settings
+from app.core.logging import logger
 
 
 def retrieve_chunks(
@@ -15,22 +16,10 @@ def retrieve_chunks(
 ) -> List[Dict[str, Any]]:
     client = get_qdrant()
 
-    must = [FieldCondition(key="access_roles", match=MatchAny(any=[role, "all"]))]
+    # NO FILTER - for debugging
+    qdrant_filter = None
 
-    if department:
-        must.append(
-            FieldCondition(key="access_departments", match=MatchAny(any=[department, "all"]))
-        )
-
-    if location:
-        must.append(
-            FieldCondition(key="access_locations", match=MatchAny(any=[location, "all"]))
-        )
-
-    if module:
-        must.append(FieldCondition(key="module", match=MatchValue(value=module)))
-
-    qdrant_filter = Filter(must=must)
+    logger.info("retrieving", role=role, dept=department, loc=location, module=module)
 
     dense_vector = embed_query(query)
     dense_results = client.search(
@@ -40,6 +29,8 @@ def retrieve_chunks(
         limit=top_k,
         with_payload=True,
     )
+
+    logger.info("dense_results", count=len(dense_results))
 
     sparse_results = []
     try:
@@ -54,8 +45,10 @@ def retrieve_chunks(
             limit=top_k,
             with_payload=True,
         )
-    except Exception:
-        pass
+    except Exception as e:
+        logger.error("sparse_search_failed", error=str(e))
+
+    logger.info("sparse_results", count=len(sparse_results))
 
     return _rrf_fuse(dense_results, sparse_results, top_k=top_k)
 
