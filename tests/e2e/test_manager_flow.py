@@ -1,42 +1,47 @@
-"""E2E: complete manager journey."""
+"""E2E: manager role coverage.
+
+After removing leave/payroll/grievance/performance, the manager role has
+no distinct surviving behavior in the backend — get_current_user does not
+discriminate by role, and require_role() only branches on hr_admin /
+executive. This file exists to make that explicit and assert it stays
+true (manager gets the same access as employee, and is still correctly
+blocked from admin-only endpoints) rather than silently dropping manager
+coverage.
+"""
 import pytest
 
 
-def test_manager_full_flow(client, manager_token, employee_token):
-    mgr_headers = {"Authorization": f"Bearer {manager_token}"}
-    emp_headers = {"Authorization": f"Bearer {employee_token}"}
+def test_manager_has_employee_level_access(client, manager_token):
+    headers = {"Authorization": f"Bearer {manager_token}"}
 
-    # Manager auth
-    me = client.get("/auth/me", headers=mgr_headers)
+    me = client.get("/auth/me", headers=headers)
     assert me.status_code == 200
     assert me.json()["role"] == "manager"
 
-    # Employee submits a leave request
-    leave_res = client.post(
-        "/leave/request",
-        json={"leave_type": "casual", "start_date": "2026-10-01", "end_date": "2026-10-01"},
-        headers=emp_headers,
+    # Manager can use the HR Assistant same as any authenticated user
+    chat_res = client.post(
+        "/chat/",
+        json={"query": "What is the grievance redressal process?"},
+        headers=headers,
     )
-    assert leave_res.status_code == 200
-    leave_id = leave_res.json()["id"]
+    assert chat_res.status_code == 200
+    assert "answer" in chat_res.json()
 
-    # Manager views pending leaves
-    pending = client.get("/leave/pending", headers=mgr_headers)
-    assert pending.status_code == 200
-    assert isinstance(pending.json(), list)
+    # Manager can list documents
+    assert client.get("/documents/", headers=headers).status_code == 200
 
-    # Manager approves the leave
-    action_res = client.post(
-        f"/leave/{leave_id}/action",
-        json={"action": "approve", "comment": "Approved via E2E test"},
-        headers=mgr_headers,
+    # Manager still cannot upload (same as employee — no manager-specific
+    # upload permission exists in documents.py)
+    upload_res = client.post(
+        "/documents/upload",
+        headers=headers,
+        data={"title": "test"},
     )
-    assert action_res.status_code == 200
-    assert action_res.json()["status"] == "approved"
+    assert upload_res.status_code == 403
 
-    # Manager views team performance
-    assert client.get("/performance/team", headers=mgr_headers).status_code == 200
 
-    # Manager cannot access admin endpoints
-    assert client.get("/admin/dashboard", headers=mgr_headers).status_code == 403
-    assert client.get("/admin/users", headers=mgr_headers).status_code == 403
+def test_manager_cannot_access_admin_endpoints(client, manager_token):
+    headers = {"Authorization": f"Bearer {manager_token}"}
+    assert client.get("/admin/dashboard", headers=headers).status_code == 403
+    assert client.get("/admin/users", headers=headers).status_code == 403
+    assert client.get("/admin/audit-logs", headers=headers).status_code == 403

@@ -19,6 +19,12 @@ class ChatRequest(BaseModel):
     module: Optional[str] = None
 
 
+class ChatFeedbackRequest(BaseModel):
+    query: str
+    is_positive: bool
+    suggestion: Optional[str] = None
+
+
 def _log_in_background(user_id: int, query: str, confidence: float, llm_called: bool, module: Optional[str]):
     db = SessionLocal()
     try:
@@ -67,6 +73,20 @@ async def chat(
     return result
 
 
+@router.post("/feedback", summary="Submit feedback for a chat interaction")
+def submit_feedback(
+    req: ChatFeedbackRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    log_action(db, current_user.id, "CHAT_FEEDBACK", "chat", None, {
+        "query": req.query[:500],
+        "is_positive": req.is_positive,
+        "suggestion": req.suggestion,
+    })
+    return {"status": "success"}
+
+
 @router.post("/stream", summary="Stream HR AI response token by token")
 async def chat_stream(
     req: ChatRequest,
@@ -99,7 +119,10 @@ async def chat_stream(
             module=req.module,
             user_id=user_id,
         ):
-            if chunk["type"] == "token":
+            if chunk["type"] == "status":
+                yield f"data: {json.dumps({'type': 'status', 'stage': chunk.get('stage'), 'text': chunk['text']})}\n\n"
+
+            elif chunk["type"] == "token":
                 full_answer += chunk["text"]
                 llm_called = True
                 yield f"data: {json.dumps({'type': 'token', 'text': chunk['text']})}\n\n"

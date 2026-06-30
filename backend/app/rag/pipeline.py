@@ -52,13 +52,17 @@ async def run_rag_pipeline(
 
     try:
         from app.rag.retriever import retrieve_chunks
-        chunks = retrieve_chunks(
-            query=transformed_query,
-            role=role,
-            department=dept,
-            location=loc,
-            module=module,
-            top_k=10,
+        loop = asyncio.get_event_loop()
+        chunks = await loop.run_in_executor(
+            None,
+            lambda: retrieve_chunks(
+                query=transformed_query,
+                role=role,
+                department=dept,
+                location=loc,
+                module=module,
+                top_k=10,
+            )
         )
     except Exception as e:
         logger.error("retrieval_failed", error=str(e))
@@ -80,7 +84,8 @@ async def run_rag_pipeline(
 
     try:
         from app.rag.reranker import rerank
-        chunks = rerank(transformed_query, chunks, top_k=5)
+        loop = asyncio.get_event_loop()
+        chunks = await loop.run_in_executor(None, rerank, transformed_query, chunks, 5)
     except Exception:
         chunks = chunks[:5]
 
@@ -140,8 +145,8 @@ async def run_rag_pipeline_stream(
         cached = redis.get(cache_key)
         if cached:
             data = json.loads(cached)
-            for char in data["answer"]:
-                yield {"type": "token", "text": char}
+            # Cached answers render instantly (no artificial streaming delay).
+            yield {"type": "token", "text": data["answer"]}
             yield {
                 "type": "done",
                 "citations": data.get("citations", []),
@@ -153,18 +158,27 @@ async def run_rag_pipeline_stream(
         redis = None
         cache_key = None
 
+    # Real-time progress: each status reflects an actual pipeline stage the user is waiting on.
+    yield {"type": "status", "stage": "understanding", "text": "Understanding your question"}
+
     from app.rag.query_transform import transform_query
     transformed_query = transform_query(query)
 
+    yield {"type": "status", "stage": "searching", "text": "Searching your HR documents"}
+
     try:
         from app.rag.retriever import retrieve_chunks
-        chunks = retrieve_chunks(
-            query=transformed_query,
-            role=role,
-            department=dept,
-            location=loc,
-            module=module,
-            top_k=10,
+        loop = asyncio.get_event_loop()
+        chunks = await loop.run_in_executor(
+            None,
+            lambda: retrieve_chunks(
+                query=transformed_query,
+                role=role,
+                department=dept,
+                location=loc,
+                module=module,
+                top_k=10,
+            )
         )
     except Exception as e:
         logger.error("retrieval_failed", error=str(e))
@@ -181,9 +195,16 @@ async def run_rag_pipeline_stream(
         }
         return
 
+    yield {
+        "type": "status",
+        "stage": "reviewing",
+        "text": f"Reviewing {len(chunks)} relevant section{'s' if len(chunks) != 1 else ''}",
+    }
+
     try:
         from app.rag.reranker import rerank
-        chunks = rerank(transformed_query, chunks, top_k=5)
+        loop = asyncio.get_event_loop()
+        chunks = await loop.run_in_executor(None, rerank, transformed_query, chunks, 5)
     except Exception:
         chunks = chunks[:5]
 
@@ -197,13 +218,14 @@ async def run_rag_pipeline_stream(
     from app.rag.prompt_templates import HR_SYSTEM_PROMPT, build_rag_prompt
     prompt = build_rag_prompt(query, clean_chunks)
 
+    yield {"type": "status", "stage": "writing", "text": "Writing your answer"}
+
     full_answer = ""
     async for token in _call_llm_stream(HR_SYSTEM_PROMPT, prompt):
         clean_token = filter_pii(token, use_presidio=False)
         full_answer += clean_token
-        for char in clean_token:
-            yield {"type": "token", "text": char}
-            await asyncio.sleep(0.01)
+        # Stream real LLM tokens as they arrive — fast and natural, no artificial delay.
+        yield {"type": "token", "text": clean_token}
 
     full_answer = filter_pii(full_answer, use_presidio=False)
     confidence = compute_confidence_from_rerank(clean_chunks, llm_answer=full_answer)
@@ -237,7 +259,7 @@ def _llm_call_sync(system_prompt: str, user_prompt: str) -> str:
             {"role": "user", "content": user_prompt},
         ],
         temperature=0.0,
-        max_tokens=600,
+        max_tokens=1200,
     )
     return (completion.choices[0].message.content or "").strip()
 
@@ -262,7 +284,7 @@ async def _call_llm_stream(system_prompt: str, user_prompt: str) -> AsyncGenerat
                 {"role": "user", "content": user_prompt},
             ],
             temperature=0.0,
-            max_tokens=600,
+            max_tokens=1200,
             stream=True,
         )
         async for chunk in stream:

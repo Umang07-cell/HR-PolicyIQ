@@ -28,10 +28,6 @@ def test_hr_admin_full_flow(client, admin_token):
     assert logs.status_code == 200
     assert isinstance(logs.json(), list)
 
-    # Grievances
-    grievances = client.get("/grievance/all", headers=headers)
-    assert grievances.status_code == 200
-
     # Document upload
     content = b"HR Test Policy: Employees are entitled to 12 casual leaves per year."
     upload = client.post(

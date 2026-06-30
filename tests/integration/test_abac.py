@@ -45,13 +45,3 @@ def test_manager_cannot_access_admin_dashboard(client, manager_token):
 def test_unauthenticated_request_rejected(client):
     res = client.get("/admin/dashboard")
     assert res.status_code in (401, 403)
-
-
-def test_employee_can_view_own_leaves(client, employee_token):
-    res = client.get("/leave/my", headers={"Authorization": f"Bearer {employee_token}"})
-    assert res.status_code == 200
-
-
-def test_employee_cannot_view_pending_all_leaves(client, employee_token):
-    res = client.get("/leave/pending", headers={"Authorization": f"Bearer {employee_token}"})
-    assert res.status_code == 403

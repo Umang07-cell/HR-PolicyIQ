@@ -13,15 +13,18 @@ interface UpdatePayload {
 interface ChatState {
   messages: ChatMessage[];
   isLoading: boolean;
+  stage: string | null;
   addMessage: (msg: ChatMessage) => void;
   updateLastMessage: (payload: UpdatePayload) => void;
   setLoading: (v: boolean) => void;
+  setStage: (s: string | null) => void;
   clear: () => void;
 }
 
 export const useChatStore = create<ChatState>((set) => ({
   messages: [],
   isLoading: false,
+  stage: null,
 
   addMessage: (msg) =>
     set((s) => ({ messages: [...s.messages, msg] })),
@@ -46,5 +49,6 @@ export const useChatStore = create<ChatState>((set) => ({
     }),
 
   setLoading: (v) => set({ isLoading: v }),
-  clear: () => set({ messages: [] }),
+  setStage: (s) => set({ stage: s }),
+  clear: () => set({ messages: [], stage: null }),
 }));

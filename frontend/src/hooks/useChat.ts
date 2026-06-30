@@ -3,12 +3,13 @@ import { useNotificationStore } from "../store/notificationStore";
 import { getApiBase } from "../api/client";
 
 export const useChat = () => {
-  const { messages, isLoading, addMessage, setLoading, updateLastMessage } = useChatStore();
+  const { messages, isLoading, addMessage, setLoading, updateLastMessage, setStage } = useChatStore();
   const { add: notify } = useNotificationStore();
 
   const send = async (query: string, module?: string) => {
     addMessage({ role: "user", content: query });
     setLoading(true);
+    setStage("Getting started");
     let assistantMessageAdded = false;
 
     try {
@@ -44,9 +45,12 @@ export const useChat = () => {
           try {
             const event = JSON.parse(raw);
 
-            if (event.type === "token") {
+            if (event.type === "status") {
+              setStage(event.text);
+            } else if (event.type === "token") {
               if (!assistantMessageAdded) {
                 setLoading(false);
+                setStage(null);
                 addMessage({ role: "assistant", content: event.text, citations: [], confidence: undefined, streaming: true });
                 assistantMessageAdded = true;
               } else {
@@ -65,6 +69,7 @@ export const useChat = () => {
                 streaming: false,
               });
             } else if (event.type === "abstain") {
+              setStage(null);
               if (!assistantMessageAdded) {
                 setLoading(false);
                 addMessage({ role: "assistant", content: event.text, citations: [], confidence: undefined, streaming: false });
@@ -86,6 +91,7 @@ export const useChat = () => {
       });
     } finally {
       setLoading(false);
+      setStage(null);
     }
   };
 

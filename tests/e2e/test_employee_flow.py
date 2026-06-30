@@ -1,4 +1,10 @@
-"""E2E: complete employee journey."""
+"""E2E: employee journey against the policy-only platform.
+
+Leave/payroll/grievance/performance modules were removed; this covers what
+an employee can actually do now: authenticate, ask the HR Assistant a
+question, list visible documents, and confirm role-gated endpoints stay
+blocked.
+"""
 import pytest
 
 
@@ -10,36 +16,40 @@ def test_employee_full_flow(client, employee_token):
     assert me.status_code == 200
     assert me.json()["role"] == "employee"
 
-    # Leave
-    assert client.get("/leave/my", headers=headers).status_code == 200
-
-    leave_res = client.post(
-        "/leave/request",
-        json={"leave_type": "casual", "start_date": "2026-09-10", "end_date": "2026-09-11"},
+    # HR Assistant chat — with no documents seeded, the pipeline abstains
+    # cleanly rather than erroring, so this checks the contract, not content.
+    chat_res = client.post(
+        "/chat/",
+        json={"query": "What is the work from home policy?"},
         headers=headers,
     )
-    assert leave_res.status_code == 200
-    assert leave_res.json()["status"] == "pending"
+    assert chat_res.status_code == 200
+    chat_data = chat_res.json()
+    assert "answer" in chat_data
+    assert "citations" in chat_data
+    assert "confidence" in chat_data
 
-    # Payroll
-    assert client.get("/payroll/my", headers=headers).status_code == 200
-
-    # Grievance
-    g_res = client.post(
-        "/grievance/",
-        json={"title": "E2E Test", "description": "End to end test grievance", "priority": "low"},
+    # Chat feedback submission
+    feedback_res = client.post(
+        "/chat/feedback",
+        json={"query": "What is the work from home policy?", "is_positive": True},
         headers=headers,
     )
-    assert g_res.status_code == 200
-    assert client.get("/grievance/my", headers=headers).status_code == 200
+    assert feedback_res.status_code == 200
 
-    # Performance
-    assert client.get("/performance/my", headers=headers).status_code == 200
+    # Document listing (employees can list, not upload)
+    docs_res = client.get("/documents/", headers=headers)
+    assert docs_res.status_code == 200
+    assert isinstance(docs_res.json(), list)
 
-    # Documents (list, not upload)
-    assert client.get("/documents/", headers=headers).status_code == 200
+    # Employees cannot upload documents
+    upload_res = client.post(
+        "/documents/upload",
+        headers=headers,
+        data={"title": "test"},
+    )
+    assert upload_res.status_code == 403
 
-    # Blocked endpoints
+    # Blocked admin endpoints
     assert client.get("/admin/dashboard", headers=headers).status_code == 403
     assert client.get("/admin/users", headers=headers).status_code == 403
-    assert client.get("/leave/pending", headers=headers).status_code == 403

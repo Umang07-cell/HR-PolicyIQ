@@ -17,7 +17,7 @@ from app.db.session import engine
 from app.db.qdrant_client import init_qdrant, ensure_collection
 from app.db.redis_client import get_redis_pool
 
-from app.models import user, document, audit_log, leave, grievance, payroll, performance, recruitment, notification  # noqa
+from app.models import user, document, audit_log, notification  # noqa
 
 
 @asynccontextmanager
@@ -50,6 +50,16 @@ async def lifespan(app: FastAPI):
         logger.warning("qdrant_unavailable", error=str(e))
 
     os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
+
+    # Start the in-process document ingestion worker and recover any uploads that were
+    # left unfinished by a previous restart (the DB is the source of truth).
+    try:
+        from app.ingestion.queue_worker import start_worker, requeue_unfinished
+        start_worker()
+        requeue_unfinished()
+    except Exception as e:
+        logger.warning("ingestion_worker_start_failed", error=str(e))
+
     yield
 
 
@@ -75,19 +85,14 @@ app.add_middleware(
 app.add_exception_handler(HRPlatformException, hr_exception_handler)
 app.add_exception_handler(Exception, generic_exception_handler)
 
-from app.api import auth, documents, chat, admin, websocket, leave, payroll, grievance, attestation, performance, recruitment, analytics  # noqa
+from app.api import auth, documents, chat, admin, websocket, attestation, analytics  # noqa
 
 app.include_router(auth.router)
 app.include_router(documents.router)
 app.include_router(chat.router)
 app.include_router(admin.router)
 app.include_router(websocket.router)
-app.include_router(leave.router)
-app.include_router(payroll.router)
-app.include_router(grievance.router)
 app.include_router(attestation.router)
-app.include_router(performance.router)
-app.include_router(recruitment.router)
 app.include_router(analytics.router)
 
 

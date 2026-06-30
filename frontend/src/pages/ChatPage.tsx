@@ -2,6 +2,9 @@ import { useRef, useEffect, useState } from "react";
 import { useChat } from "../hooks/useChat";
 import { useChatStore } from "../store/chatStore";
 import { CitationCard } from "../components/chat/CitationCard";
+import { MarkdownMessage } from "../components/chat/MarkdownMessage";
+import { sendChatFeedback } from "../api/chat";
+import { useNotificationStore } from "../store/notificationStore";
 
 const SUGGESTIONS = [
   { q: "How many casual leaves am I entitled to?", icon: "M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" },
@@ -12,9 +15,9 @@ const SUGGESTIONS = [
   { q: "What documents are needed for reimbursement?", icon: "M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" },
 ];
 
-const MODULES = ["policy", "leave", "payroll", "recruitment", "performance", "grievance"];
+const MODULES = ["policy"];
 
-const TypingIndicator = () => (
+const TypingIndicator = ({ label }: { label?: string | null }) => (
   <div className="flex items-start gap-3">
     <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-blue-700 flex items-center justify-center flex-shrink-0 shadow-sm">
       <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -30,15 +33,65 @@ const TypingIndicator = () => (
             style={{ animationDelay: `${i * 0.15}s` }}
           />
         ))}
-        <span className="text-xs text-slate-400 ml-1.5">HR Assistant is thinking…</span>
+        <span className="text-xs text-slate-500 ml-1.5 transition-all duration-300">
+          {label || "HR Assistant is thinking"}…
+        </span>
       </div>
     </div>
   </div>
 );
 
-const Message = ({ msg }: { msg: any }) => {
+const Message = ({ msg, prevMsg }: { msg: any, prevMsg?: any }) => {
   const isUser = msg.role === "user";
   const [showCitations, setShowCitations] = useState(false);
+  const [feedback, setFeedback] = useState<"up" | "down" | null>(null);
+  const [suggestion, setSuggestion] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isSuggestionSubmitted, setIsSuggestionSubmitted] = useState(false);
+  const [showThankYou, setShowThankYou] = useState(false);
+  const { add: notify } = useNotificationStore();
+
+  const handleFeedback = async (type: "up" | "down") => {
+    if (!prevMsg) return; 
+    
+    if (feedback === type) {
+      setFeedback(null);
+      return;
+    }
+    
+    setFeedback(type);
+    if (type === "down") {
+      setIsSuggestionSubmitted(false);
+      setShowThankYou(false);
+    }
+    if (type === "up") {
+      try {
+        await sendChatFeedback(prevMsg.content, true);
+        notify("Thanks for your feedback!", "success");
+      } catch (err) {
+        console.error(err);
+      }
+    }
+  };
+
+  const handleSuggestionSubmit = async () => {
+    if (!suggestion.trim() || !prevMsg) return;
+    setIsSubmitting(true);
+    try {
+      await sendChatFeedback(prevMsg.content, false, suggestion);
+      setShowThankYou(true);
+      setTimeout(() => {
+        setShowThankYou(false);
+        setIsSuggestionSubmitted(true);
+        setSuggestion("");
+      }, 2500);
+    } catch (err) {
+      notify("Failed to submit feedback", "error");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
 
   return (
     <div className={`flex items-start gap-3 ${isUser ? "flex-row-reverse" : ""}`}>
@@ -64,7 +117,11 @@ const Message = ({ msg }: { msg: any }) => {
               : "bg-white border border-surface-border text-slate-800 rounded-tl-sm"
           }`}
         >
-          <p className="whitespace-pre-wrap">{msg.content}</p>
+          {isUser ? (
+            <p className="whitespace-pre-wrap">{msg.content}</p>
+          ) : (
+            <MarkdownMessage content={msg.content} />
+          )}
         </div>
 
         {/* Confidence + citation toggle */}
@@ -83,15 +140,68 @@ const Message = ({ msg }: { msg: any }) => {
                 {(msg.confidence * 100).toFixed(0)}% confidence
               </span>
             )}
-            <button
-              onClick={() => setShowCitations((v) => !v)}
-              className="text-xs text-blue-600 hover:text-blue-800 flex items-center gap-1 transition-colors"
-            >
-              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-              </svg>
-              {showCitations ? "Hide" : "View"} {msg.citations.length} source{msg.citations.length !== 1 ? "s" : ""}
-            </button>
+            
+            <div className="flex items-center gap-2 ml-auto">
+              <button
+                onClick={() => handleFeedback("up")}
+                className={`p-1.5 rounded-lg transition-colors ${
+                  feedback === "up" ? "text-emerald-600 bg-emerald-50" : "text-slate-400 hover:text-emerald-600 hover:bg-slate-50"
+                }`}
+                title="Good response"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 10h4.764a2 2 0 011.789 2.894l-3.5 7A2 2 0 0115.263 21h-4.017c-.163 0-.326-.02-.485-.06L7 20m7-10V5a2 2 0 00-2-2h-.095c-.5 0-.905.405-.905.905 0 .714-.211 1.412-.608 2.006L7 11v9m7-10h-2M7 20H5a2 2 0 01-2-2v-6a2 2 0 012-2h2.5" />
+                </svg>
+              </button>
+              <button
+                onClick={() => handleFeedback("down")}
+                className={`p-1.5 rounded-lg transition-colors ${
+                  feedback === "down" ? "text-red-500 bg-red-50" : "text-slate-400 hover:text-red-500 hover:bg-slate-50"
+                }`}
+                title="Poor response"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 14H5.236a2 2 0 01-1.789-2.894l3.5-7A2 2 0 018.736 3h4.018a2 2 0 01.485.06l3.76.94m-7 10v5a2 2 0 002 2h.096c.5 0 .905-.405.905-.904 0-.714.211-1.412.608-2.006L17 13V4m-7 10h2m5-10h2a2 2 0 012 2v6a2 2 0 01-2 2h-2.5" />
+                </svg>
+              </button>
+              <button
+                onClick={() => setShowCitations((v) => !v)}
+                className="text-xs text-blue-600 hover:text-blue-800 flex items-center gap-1 transition-colors ml-2"
+              >
+                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+                {showCitations ? "Hide" : "View"} {msg.citations.length} source{msg.citations.length !== 1 ? "s" : ""}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {feedback === "down" && !isSuggestionSubmitted && (
+          <div className="mt-2 p-3 bg-red-50 border border-red-100 rounded-xl w-full animate-fade-in text-sm flex gap-2">
+            {showThankYou ? (
+              <div className="flex-1 flex items-center justify-center text-emerald-600 font-medium py-1.5 animate-fade-in">
+                Thank you for your feedback! We'll definitely work on it.
+              </div>
+            ) : (
+              <>
+                <input
+                  type="text"
+                  placeholder="What could be improved?"
+                  className="flex-1 bg-white border border-red-200 rounded-lg px-3 py-1.5 focus:outline-none focus:border-red-400 focus:ring-1 focus:ring-red-400"
+                  value={suggestion}
+                  onChange={e => setSuggestion(e.target.value)}
+                  disabled={isSubmitting}
+                />
+                <button 
+                  onClick={handleSuggestionSubmit}
+                  disabled={!suggestion.trim() || isSubmitting}
+                  className="bg-red-500 hover:bg-red-600 text-white px-3 py-1.5 rounded-lg disabled:opacity-50 transition-colors"
+                >
+                  Submit
+                </button>
+              </>
+            )}
           </div>
         )}
 
@@ -109,7 +219,7 @@ const Message = ({ msg }: { msg: any }) => {
 
 export default function ChatPage() {
   const { send } = useChat();
-  const { messages, isLoading, clear } = useChatStore();
+  const { messages, isLoading, stage, clear } = useChatStore();
   const [input, setInput] = useState("");
   const [module, setModule] = useState("");
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -217,9 +327,9 @@ export default function ChatPage() {
         )}
 
         {messages.map((m, i) => (
-          <Message key={i} msg={m} />
+          <Message key={i} msg={m} prevMsg={i > 0 ? messages[i-1] : undefined} />
         ))}
-        {isLoading && <TypingIndicator />}
+        {isLoading && <TypingIndicator label={stage} />}
         <div ref={bottomRef} />
       </div>
 

@@ -32,25 +32,28 @@ export const Modal = ({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4"
+      className="fixed inset-0 z-50 overflow-y-auto"
       role="dialog"
       aria-modal="true"
       aria-labelledby="modal-title"
     >
-      {/* Backdrop */}
+      {/* Backdrop (fixed so it always covers the viewport, even while the overlay scrolls) */}
       <div
-        className="absolute inset-0 bg-slate-950/60 backdrop-blur-sm animate-fade-in"
+        className="fixed inset-0 bg-slate-950/60 backdrop-blur-sm animate-fade-in"
         onClick={onClose}
         aria-hidden
       />
 
-      {/* Panel */}
-      <div
-        className={`relative bg-white w-full ${widths[size]} rounded-t-3xl sm:rounded-2xl shadow-modal animate-slide-up overflow-hidden`}
-      >
-        {/* Header */}
-        <div className="flex items-start justify-between px-6 py-4 border-b border-surface-border">
-          <div>
+      {/* Centering wrapper: min-h-full inside the scroll container keeps both the header and
+          the footer reachable for tall modals, while still centering short ones. */}
+      <div className="relative flex min-h-full items-end sm:items-center justify-center p-0 sm:p-4">
+        {/* Panel: bounded height with a pinned header and a scrollable body. */}
+        <div
+          className={`relative bg-white w-full ${widths[size]} rounded-t-3xl sm:rounded-2xl shadow-modal animate-slide-up overflow-hidden flex flex-col max-h-[92dvh] sm:max-h-[88vh]`}
+        >
+        {/* Header (pinned) */}
+        <div className="flex items-start justify-between gap-3 px-6 py-4 border-b border-surface-border shrink-0">
+          <div className="min-w-0">
             <h3 id="modal-title" className="text-base font-semibold text-slate-900">{title}</h3>
             {description && <p className="text-xs text-slate-500 mt-0.5">{description}</p>}
           </div>
@@ -65,9 +68,11 @@ export const Modal = ({
           </button>
         </div>
 
-        {/* Body */}
-        <div className="px-6 py-5 overflow-y-auto max-h-[70vh] scrollbar-thin">
-          {children}
+          {/* Body: sizes to content; scrolls only if it would exceed the panel's max height.
+              No flex-1 — that would stretch a short form and leave empty white space below. */}
+          <div className="px-6 py-5 overflow-y-auto scrollbar-thin min-h-0">
+            {children}
+          </div>
         </div>
       </div>
     </div>

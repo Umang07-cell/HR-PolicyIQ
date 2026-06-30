@@ -92,6 +92,25 @@ async def upload_document(
         os.remove(file_path)
         raise HTTPException(status_code=415, detail="File content does not match declared type.")
 
+    # Duplicate guard: same title + identical byte size among non-archived documents is
+    # almost certainly a re-upload of the same file. Reject to avoid duplicate vectors.
+    existing = (
+        db.query(Document)
+        .filter(
+            Document.status != DocumentStatus.archived,
+            Document.title == title,
+            Document.file_size == bytes_read,
+        )
+        .first()
+    )
+    if existing:
+        os.remove(file_path)
+        raise HTTPException(
+            status_code=409,
+            detail=f"A document with the same title and size already exists (id={existing.id}). "
+                   f"Delete or archive it first to re-upload.",
+        )
+
     roles = [r.strip() for r in access_roles.split(",") if r.strip()]
     depts = [d.strip() for d in access_departments.split(",") if d.strip()]
     locs = [l.strip() for l in access_locations.split(",") if l.strip()]
@@ -108,32 +127,16 @@ async def upload_document(
         access_departments=depts,
         access_locations=locs,
         uploaded_by=current_user.id,
-        status=DocumentStatus.draft,
+        status=DocumentStatus.processing,
         is_indexed=False,
     )
     db.add(doc)
     db.commit()
     db.refresh(doc)
 
-    try:
-        from app.tasks.ingestion_tasks import async_index_document
-        async_index_document.delay(doc.id)
-    except Exception:
-        from app.ingestion.parser import parse_document
-        from app.ingestion.chunker import chunk_pages
-        from app.ingestion.indexer import index_chunks
-        try:
-            pages = parse_document(file_path, file.content_type)
-            chunks = chunk_pages(pages)
-            ids = index_chunks(chunks, doc.id, title, module, roles, depts, locs)
-            doc.qdrant_ids = ids
-            doc.chunk_count = len(ids)
-            doc.is_indexed = True
-            doc.status = DocumentStatus.published
-            db.commit()
-            db.refresh(doc)
-        except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Indexing failed: {str(e)}")
+    # Hand off to the in-process ingestion worker (parses + indexes in the background).
+    from app.ingestion.queue_worker import enqueue
+    enqueue(doc.id)
 
     log_action(db, current_user.id, "DOCUMENT_UPLOAD", "document", str(doc.id), {"title": title})
     return doc

@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Text, Boolean, JSON, ForeignKey, Enum as SAEnum
+from sqlalchemy import Column, Integer, String, Text, Boolean, JSON, ForeignKey, Enum as SAEnum, Index
 from app.db.base import Base
 from app.models.base import TimestampMixin
 import enum
@@ -30,3 +30,10 @@ class Document(Base, TimestampMixin):
     access_departments = Column(JSON, default=list)
     access_locations = Column(JSON, default=list)
     uploaded_by = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+
+    # Composite indexes for common query patterns
+    __table_args__ = (
+        Index("ix_doc_status_module", "status", "module"),
+        Index("ix_doc_status_created", "status", "created_at"),
+        Index("ix_doc_indexed_status", "is_indexed", "status"),
+    )

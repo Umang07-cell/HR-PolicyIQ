@@ -8,7 +8,7 @@ from app.models.user import User
 from app.models.audit_log import AuditLog
 from app.schemas.auth import UserCreate, UserOut
 from app.services.user_service import create_user, deactivate_user
-from app.api.analytics import get_platform_stats
+from app.api.analytics import get_platform_stats, _cache_get, _cache_set
 
 router = APIRouter(prefix="/admin", tags=["Admin"])
 
@@ -18,7 +18,12 @@ def get_dashboard(
     db: Session = Depends(get_db),
     _: User = Depends(require_role("hr_admin", "executive")),
 ):
-    return get_platform_stats(db)
+    cached = _cache_get("analytics:overview")
+    if cached:
+        return cached
+    data = get_platform_stats(db)
+    _cache_set("analytics:overview", data)
+    return data
 
 
 @router.get("/users", response_model=List[UserOut], summary="List all users")
@@ -71,13 +76,31 @@ def deactivate_user_endpoint(
 @router.get("/audit-logs", summary="Retrieve audit logs")
 def get_audit_logs(
     skip: int = 0,
-    limit: int = 100,
+    limit: int = 50,
     action: Optional[str] = None,
     db: Session = Depends(get_db),
     _: User = Depends(require_role("hr_admin", "executive")),
 ):
-    limit = min(limit, 500)
+    limit = min(limit, 100)  # Hard cap at 100, never scan full table
+    cache_key = f"analytics:audit_logs:{action or 'all'}:{skip}:{limit}"
+    cached = _cache_get(cache_key)
+    if cached:
+        return cached
     q = db.query(AuditLog)
     if action:
         q = q.filter(AuditLog.action == action)
-    return q.order_by(AuditLog.timestamp.desc()).offset(skip).limit(limit).all()
+    logs = q.order_by(AuditLog.timestamp.desc()).offset(skip).limit(limit).all()
+    data = [
+        {
+            "id": l.id,
+            "user_id": l.user_id,
+            "action": l.action,
+            "resource": l.resource,
+            "resource_id": l.resource_id,
+            "detail": l.detail,
+            "timestamp": str(l.timestamp),
+        }
+        for l in logs
+    ]
+    _cache_set(cache_key, data, ttl=30)  # 30s cache for audit logs
+    return data

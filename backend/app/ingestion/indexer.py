@@ -1,12 +1,25 @@
 from typing import List
 import uuid
-from qdrant_client.models import PointStruct, SparseVector
+from qdrant_client.models import PointStruct, SparseVector, Filter, FieldCondition, MatchValue
 from app.db.qdrant_client import get_qdrant
 from app.rag.embedder import embed_texts, embed_sparse
 from app.core.config import settings
 from app.core.logging import logger
 
 UPSERT_BATCH_SIZE = 50
+
+
+def delete_document_vectors(document_id: int) -> None:
+    """Remove all vectors belonging to a document. Makes re-indexing idempotent
+    (no duplicate chunks accumulate when a document is processed more than once)."""
+    client = get_qdrant()
+    client.delete(
+        collection_name=settings.QDRANT_COLLECTION,
+        points_selector=Filter(
+            must=[FieldCondition(key="document_id", match=MatchValue(value=document_id))]
+        ),
+    )
+    logger.info("document_vectors_deleted", doc_id=document_id)
 
 
 def index_chunks(chunks, document_id, document_title, module, access_roles, access_departments, access_locations):
