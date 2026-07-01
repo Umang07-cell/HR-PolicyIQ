@@ -89,17 +89,11 @@ async def run_rag_pipeline(
     except Exception:
         chunks = chunks[:5]
 
-    from app.rag.pii_filter import filter_pii
-    clean_chunks = []
-    for c in chunks:
-        c_copy = dict(c)
-        c_copy["text"] = filter_pii(c["text"], use_presidio=False)
-        clean_chunks.append(c_copy)
+    clean_chunks = chunks
 
     from app.rag.prompt_templates import HR_SYSTEM_PROMPT, build_rag_prompt
     prompt = build_rag_prompt(query, clean_chunks)
     llm_answer = await _call_llm(HR_SYSTEM_PROMPT, prompt)
-    llm_answer = filter_pii(llm_answer, use_presidio=False)
 
     confidence = compute_confidence_from_rerank(clean_chunks, llm_answer=llm_answer)
 
@@ -145,7 +139,6 @@ async def run_rag_pipeline_stream(
         cached = redis.get(cache_key)
         if cached:
             data = json.loads(cached)
-            # Cached answers render instantly (no artificial streaming delay).
             yield {"type": "token", "text": data["answer"]}
             yield {
                 "type": "done",
@@ -158,7 +151,6 @@ async def run_rag_pipeline_stream(
         redis = None
         cache_key = None
 
-    # Real-time progress: each status reflects an actual pipeline stage the user is waiting on.
     yield {"type": "status", "stage": "understanding", "text": "Understanding your question"}
 
     from app.rag.query_transform import transform_query
@@ -208,12 +200,7 @@ async def run_rag_pipeline_stream(
     except Exception:
         chunks = chunks[:5]
 
-    from app.rag.pii_filter import filter_pii
-    clean_chunks = []
-    for c in chunks:
-        c_copy = dict(c)
-        c_copy["text"] = filter_pii(c["text"], use_presidio=False)
-        clean_chunks.append(c_copy)
+    clean_chunks = chunks
 
     from app.rag.prompt_templates import HR_SYSTEM_PROMPT, build_rag_prompt
     prompt = build_rag_prompt(query, clean_chunks)
@@ -222,12 +209,9 @@ async def run_rag_pipeline_stream(
 
     full_answer = ""
     async for token in _call_llm_stream(HR_SYSTEM_PROMPT, prompt):
-        clean_token = filter_pii(token, use_presidio=False)
-        full_answer += clean_token
-        # Stream real LLM tokens as they arrive — fast and natural, no artificial delay.
-        yield {"type": "token", "text": clean_token}
+        full_answer += token
+        yield {"type": "token", "text": token}
 
-    full_answer = filter_pii(full_answer, use_presidio=False)
     confidence = compute_confidence_from_rerank(clean_chunks, llm_answer=full_answer)
 
     from app.rag.citation import format_citations
