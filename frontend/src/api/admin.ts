@@ -6,3 +6,5 @@ export const getAnalytics = () => client.get("/analytics/overview");
 export const getChatUsage = () => client.get("/analytics/chat-usage");
 export const getChatFeedback = () => client.get("/analytics/chat-feedback");
 export const deleteChatFeedback = (id: number) => client.delete(`/analytics/chat-feedback/${id}`);
+export const createUser = (data: any) => client.post("/admin/users", data);
+export const deactivateUser = (id: number) => client.patch(`/admin/users/${id}/deactivate`);
