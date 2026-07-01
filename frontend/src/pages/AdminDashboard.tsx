@@ -80,7 +80,7 @@ export default function AdminDashboard() {
       ) : (
         <div className="animate-fade-in">
           {tab === "overview" && stats && <MetricsPanel stats={stats} />}
-          {tab === "users" && <UserTable users={users} />}
+          {tab === "users" && <UserTable users={users} onRefresh={loadData} />}
           {tab === "audit" && <AuditLogViewer logs={logs} />}
           {tab === "policies" && <PolicyManager />}
         </div>
